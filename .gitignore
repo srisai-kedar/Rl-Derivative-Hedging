@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+checkpoints/
+results/
+.env
+*.zip
+*.pkl
+tb_logs/
+.ipynb_checkpoints/

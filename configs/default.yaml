@@ -1,0 +1,11 @@
+option:
+  S0: 100.0
+  K: 100.0
+  T: 30          # days to expiry
+  r: 0.05        # annualised risk-free rate
+  sigma: 0.20    # annualised volatility
+  dt: 0.004      # 1/252 approx — one trading day
+
+hedging:
+  cost_kappa: 0.001    # proportional transaction cost coefficient
+  n_steps: 30          # steps per episode = T in trading days

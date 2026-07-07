@@ -1,0 +1,18 @@
+training:
+  total_timesteps: 2_000_000
+  n_envs: 8
+  seed: 42
+  eval_freq: 50_000
+  n_eval_episodes: 100
+  save_freq: 100_000
+
+sac:
+  learning_rate: 3.0e-4
+  buffer_size: 500_000
+  learning_starts: 10_000
+  batch_size: 512
+  tau: 0.005
+  gamma: 0.99
+  ent_coef: "auto"
+  policy: "MlpPolicy"
+  net_arch: [256, 256]
