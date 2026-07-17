@@ -40,7 +40,8 @@ def test_terminal_price_log_normality():
     T = n_steps * dt
     mean = np.log(S0) + (mu - 0.5 * sigma**2) * T
     std = sigma * np.sqrt(T)
-    _, p_value = stats.kstest(log_terminal, "norm", args=(mean, std))
+    standardized = (log_terminal - mean) / std
+    _, p_value = stats.kstest(standardized, "norm")
     assert p_value > 0.05
 
 

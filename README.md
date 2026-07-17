@@ -20,5 +20,10 @@ pytest --cov=src/finance --cov=src/simulation
 
 ## Project Status
 
-- Phase 0: Project skeleton and tooling
-- Phase 1: Black-Scholes pricing, Greeks, GBM simulation
+- [x] Phase 0: Project skeleton and tooling
+- [x] Phase 1: Black-Scholes pricing, Greeks, GBM simulation
+- [ ] Phase 2: Gymnasium hedging environment
+- [ ] Phase 3: SAC training pipeline
+- [ ] Phase 4: Evaluation and backtesting
+- [ ] Phase 5: Streamlit dashboard
+- [ ] Phase 6: Hyperparameter search (Optuna)
