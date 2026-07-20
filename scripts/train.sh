@@ -1,2 +1,4 @@
 #!/usr/bin/env bash
-# Training script — to be implemented in Phase 3.
+set -euo pipefail
+
+python -m src.training.train --config "${1:-configs/training.yaml}"
