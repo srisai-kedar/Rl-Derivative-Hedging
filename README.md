@@ -24,6 +24,6 @@ pytest --cov=src/finance --cov=src/simulation
 - [x] Phase 1: Black-Scholes pricing, Greeks, GBM simulation
 - [x] Phase 2: Gymnasium hedging environment
 - [x] Phase 3: SAC training pipeline
-- [ ] Phase 4: Evaluation and backtesting
+- [X] Phase 4: Evaluation and backtesting
 - [ ] Phase 5: Streamlit dashboard
 - [ ] Phase 6: Hyperparameter search (Optuna)
