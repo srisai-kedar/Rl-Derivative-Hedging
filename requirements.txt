@@ -10,4 +10,5 @@ optuna>=3.6
 torch>=2.2
 tensorboard>=2.16
 tqdm>=4.66
+kaleido>=0.2.1
 rich>=13.7

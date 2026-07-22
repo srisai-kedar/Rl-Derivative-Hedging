@@ -139,3 +139,44 @@ def training_envs(loaded_config):
     )
     yield env
     env.close()
+
+
+N_EVAL_EPISODES = 50
+
+
+@pytest.fixture
+def n_eval_episodes():
+    return N_EVAL_EPISODES
+
+
+@pytest.fixture
+def fast_eval_config():
+    from src.training.hyperparams import EnvironmentConfig
+
+    return EnvironmentConfig(
+        S0=100.0,
+        K=100.0,
+        T=30,
+        r=0.05,
+        sigma=0.20,
+        dt=1 / 252,
+        kappa=0.001,
+        randomise_params=False,
+    )
+
+
+@pytest.fixture
+def backtest_results_fixture(fast_eval_config):
+    from src.evaluation.backtest import BSDeltaPolicy, ZeroHedgePolicy, run_backtest
+
+    return run_backtest(
+        policies=[BSDeltaPolicy(), ZeroHedgePolicy()],
+        env_config=fast_eval_config,
+        n_episodes=N_EVAL_EPISODES,
+        show_progress=False,
+    )
+
+
+@pytest.fixture
+def results_fixture(backtest_results_fixture):
+    return backtest_results_fixture
