@@ -1,5 +1,7 @@
 __pycache__/
 *.pyc
+.coverage
+*.egg-info/
 .mypy_cache/
 .ruff_cache/
 checkpoints/
