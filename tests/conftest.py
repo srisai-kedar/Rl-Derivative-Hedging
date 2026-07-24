@@ -180,3 +180,21 @@ def backtest_results_fixture(fast_eval_config):
 @pytest.fixture
 def results_fixture(backtest_results_fixture):
     return backtest_results_fixture
+
+
+@pytest.fixture
+def mock_results_dir(tmp_path, backtest_results_fixture):
+    """Create a fake results directory with valid files for dashboard tests."""
+    from src.evaluation.backtest import save_results
+    from src.evaluation.metrics import compare_metrics
+
+    run_dir = tmp_path / "results" / "test_run_20240101_120000"
+    run_dir.mkdir(parents=True)
+
+    metrics = compare_metrics(
+        backtest_results_fixture,
+        primary="bs_delta",
+        baseline="zero_hedge",
+    )
+    save_results(backtest_results_fixture, metrics, str(run_dir))
+    return tmp_path

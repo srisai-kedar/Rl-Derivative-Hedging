@@ -18,6 +18,15 @@ pytest tests/test_simulation.py -v
 pytest --cov=src/finance --cov=src/simulation
 ```
 
+## Run Dashboard
+
+The Streamlit dashboard reads pre-computed evaluation results from `results/`.
+Run it from the project root so the relative results path resolves correctly.
+
+```bash
+streamlit run src/dashboard/app.py
+```
+
 ## Project Status
 
 - [x] Phase 0: Project skeleton and tooling
