@@ -34,5 +34,5 @@ streamlit run src/dashboard/app.py
 - [x] Phase 2: Gymnasium hedging environment
 - [x] Phase 3: SAC training pipeline
 - [X] Phase 4: Evaluation and backtesting
-- [ ] Phase 5: Streamlit dashboard
+- [X] Phase 5: Streamlit dashboard
 - [ ] Phase 6: Hyperparameter search (Optuna)
