@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+from typing import TypeAlias
+
 import numpy as np
 from scipy.special import ndtr
+
+Numeric: TypeAlias = float | np.ndarray
 
 _SQRT_2PI = np.sqrt(2.0 * np.pi)
 
 
 def _broadcast_inputs(
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Convert inputs to float arrays with common broadcasting shape."""
     arrays = [np.asarray(x, dtype=float) for x in (S, K, r, sigma, T)]
@@ -22,15 +26,16 @@ def _broadcast_inputs(
 
 def _norm_pdf(x: np.ndarray) -> np.ndarray:
     """Standard normal probability density function."""
-    return np.exp(-0.5 * x**2) / _SQRT_2PI
+    pdf: np.ndarray = np.exp(-0.5 * x**2) / _SQRT_2PI
+    return pdf
 
 
 def _d1(
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
 ) -> np.ndarray:
     """Compute d1 term of Black-Scholes formula."""
     S, K, r, sigma, T = _broadcast_inputs(S, K, r, sigma, T)
@@ -44,11 +49,11 @@ def _d1(
 
 
 def _d2(
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
 ) -> np.ndarray:
     """Compute d2 = d1 - sigma * sqrt(T)."""
     S, K, r, sigma, T = _broadcast_inputs(S, K, r, sigma, T)
@@ -63,11 +68,11 @@ def _d2(
 
 
 def call_price(
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
 ) -> np.ndarray:
     """Black-Scholes European call option price."""
     S, K, r, sigma, T = _broadcast_inputs(S, K, r, sigma, T)
@@ -76,15 +81,16 @@ def call_price(
 
     price = S * ndtr(d1) - K * np.exp(-r * T) * ndtr(d2)
     intrinsic = np.maximum(S - K, 0.0)
-    return np.where(T == 0, intrinsic, price)
+    result: np.ndarray = np.where(T == 0, intrinsic, price)
+    return result
 
 
 def put_price(
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
 ) -> np.ndarray:
     """Black-Scholes European put option price."""
     S, K, r, sigma, T = _broadcast_inputs(S, K, r, sigma, T)
@@ -93,15 +99,16 @@ def put_price(
 
     price = K * np.exp(-r * T) * ndtr(-d2) - S * ndtr(-d1)
     intrinsic = np.maximum(K - S, 0.0)
-    return np.where(T == 0, intrinsic, price)
+    result: np.ndarray = np.where(T == 0, intrinsic, price)
+    return result
 
 
 def call_delta(
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
 ) -> np.ndarray:
     """Call delta = N(d1). Range: [0, 1]."""
     S, K, r, sigma, T = _broadcast_inputs(S, K, r, sigma, T)
@@ -112,11 +119,11 @@ def call_delta(
 
 
 def put_delta(
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
 ) -> np.ndarray:
     """Put delta = N(d1) - 1. Range: [-1, 0]."""
     S, K, r, sigma, T = _broadcast_inputs(S, K, r, sigma, T)
@@ -127,11 +134,11 @@ def put_delta(
 
 
 def gamma(
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
 ) -> np.ndarray:
     """Gamma = N'(d1) / (S * sigma * sqrt(T)). Same for call and put."""
     S, K, r, sigma, T = _broadcast_inputs(S, K, r, sigma, T)
@@ -144,11 +151,11 @@ def gamma(
 
 
 def vega(
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
 ) -> np.ndarray:
     """Vega = S * N'(d1) * sqrt(T), per unit of vol."""
     S, K, r, sigma, T = _broadcast_inputs(S, K, r, sigma, T)
@@ -161,11 +168,11 @@ def vega(
 
 
 def theta_call(
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
 ) -> np.ndarray:
     """Call theta (time decay per unit time, annualised)."""
     S, K, r, sigma, T = _broadcast_inputs(S, K, r, sigma, T)

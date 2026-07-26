@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import streamlit as st
 
 from src.evaluation.backtest import BacktestResults
 from src.evaluation.plots import plot_episode_replay
-
 
 AGENT_DISPLAY = {
     "rl_agent": ("RL Agent", "badge-rl"),
@@ -60,7 +60,7 @@ def render_episode_replay_page(results: BacktestResults) -> None:
     _render_percentile_context(episode_id, results)
 
 
-def _render_episode_summary(ep_data, results: BacktestResults) -> None:
+def _render_episode_summary(ep_data: pd.DataFrame, results: BacktestResults) -> None:
     """Render terminal P&L and transaction cost cards for one episode."""
     if ep_data.empty:
         return
@@ -68,7 +68,7 @@ def _render_episode_summary(ep_data, results: BacktestResults) -> None:
     agents = ep_data["agent_type"].tolist()
     cols = st.columns(max(len(agents), 1))
 
-    for col, (_, row) in zip(cols, ep_data.iterrows()):
+    for col, (_, row) in zip(cols, ep_data.iterrows(), strict=True):
         agent = row["agent_type"]
         pnl = row["terminal_pnl"]
         cost = row["total_cost"]

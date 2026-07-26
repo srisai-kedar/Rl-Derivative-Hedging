@@ -6,8 +6,8 @@ import numpy as np
 
 
 def proportional_cost(
-    delta_change: np.ndarray,
-    S: np.ndarray,
+    delta_change: float | np.ndarray,
+    S: float | np.ndarray,
     kappa: float,
 ) -> np.ndarray:
     """Cost = kappa * |delta_change| * S."""
@@ -15,8 +15,8 @@ def proportional_cost(
 
 
 def fixed_plus_proportional_cost(
-    delta_change: np.ndarray,
-    S: np.ndarray,
+    delta_change: float | np.ndarray,
+    S: float | np.ndarray,
     kappa_fixed: float,
     kappa_prop: float,
 ) -> np.ndarray:

@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pandas as pd
+
+if TYPE_CHECKING:
+    from src.evaluation.backtest import BacktestResults
 
 
 def compute_hedging_error(pnl: pd.Series) -> float:
@@ -41,7 +46,7 @@ def compute_improvement_over_baseline(rl_metric: float, baseline_metric: float, 
     return float(numerator / abs(baseline_metric) * 100)
 
 
-def compute_all_metrics(results, agent_type: str) -> dict[str, float]:
+def compute_all_metrics(results: BacktestResults, agent_type: str) -> dict[str, float]:
     """Compute the complete metric set for one policy in a backtest."""
     subset = results.episode_df[results.episode_df["agent_type"] == agent_type]
     if len(subset) == 0:
@@ -57,7 +62,11 @@ def compute_all_metrics(results, agent_type: str) -> dict[str, float]:
     }
 
 
-def compare_metrics(results, primary: str = "rl_agent", baseline: str = "bs_delta") -> dict[str, dict[str, float]]:
+def compare_metrics(
+    results: BacktestResults,
+    primary: str = "rl_agent",
+    baseline: str = "bs_delta",
+) -> dict[str, dict[str, float]]:
     """Compute per-policy metrics and optional primary-vs-baseline deltas."""
     agent_types = results.episode_df["agent_type"].unique().tolist()
     metrics = {agent_type: compute_all_metrics(results, agent_type) for agent_type in agent_types}

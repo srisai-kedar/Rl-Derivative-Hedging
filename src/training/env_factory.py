@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import os
 from collections.abc import Callable
+from typing import cast
 
 import gymnasium as gym
 import numpy as np
@@ -37,7 +38,7 @@ class FreshResetSeedWrapper(gym.Wrapper):
     ) -> tuple[np.ndarray, dict]:
         if seed is None:
             seed = int(self._reset_rng.integers(0, np.iinfo(np.int32).max))
-        return self.env.reset(seed=seed, options=options)
+        return cast(tuple[np.ndarray, dict], self.env.reset(seed=seed, options=options))
 
 
 def _make_env_fn(
@@ -55,10 +56,10 @@ def _make_env_fn(
 
     def _init() -> Monitor:
         env_seed = base_seed + rank
-        env = HedgingEnv(**env_config.as_dict(), seed=env_seed)
-        env = FreshResetSeedWrapper(env, seed=env_seed)
+        base_env: gym.Env = HedgingEnv(**env_config.as_dict(), seed=env_seed)
+        wrapped_env: gym.Env = FreshResetSeedWrapper(base_env, seed=env_seed)
         monitor_path = os.path.join(log_dir, f"env_{rank}") if log_dir else None
-        return Monitor(env, filename=monitor_path)
+        return Monitor(wrapped_env, filename=monitor_path)
 
     return _init
 
@@ -83,7 +84,7 @@ def build_training_envs(
         _make_env_fn(env_config, rank=i, base_seed=seed, log_dir=log_dir)
         for i in range(n_envs)
     ]
-    vec_env = DummyVecEnv(env_fns)
+    vec_env = DummyVecEnv(env_fns)  # type: ignore[arg-type]
     return VecNormalize(
         vec_env,
         norm_obs=vn_config.norm_obs,

@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
+
+if TYPE_CHECKING:
+    from src.evaluation.backtest import BacktestResults
 from plotly.subplots import make_subplots
 
 from src.evaluation.metrics import compute_cvar
@@ -38,7 +43,7 @@ def _axis_style(fig: go.Figure) -> None:
     fig.update_yaxes(gridcolor="#2d3748", linecolor="#2d3748", zerolinecolor="#2d3748")
 
 
-def plot_pnl_distribution(results, n_bins: int = 60, title: str = "Terminal P&L Distribution") -> go.Figure:
+def plot_pnl_distribution(results: BacktestResults, n_bins: int = 60, title: str = "Terminal P&L Distribution") -> go.Figure:
     fig = go.Figure()
     for agent_type in results.episode_df["agent_type"].unique():
         pnl = results.episode_df.loc[results.episode_df["agent_type"] == agent_type, "terminal_pnl"]
@@ -51,7 +56,7 @@ def plot_pnl_distribution(results, n_bins: int = 60, title: str = "Terminal P&L 
     return fig
 
 
-def plot_hedge_ratio_over_time(results, agent_types: list[str] | None = None, title: str = "Hedge Ratio Over Time") -> go.Figure:
+def plot_hedge_ratio_over_time(results: BacktestResults, agent_types: list[str] | None = None, title: str = "Hedge Ratio Over Time") -> go.Figure:
     fig = go.Figure()
     available = results.step_df["agent_type"].unique().tolist()
     for agent_type in agent_types or available:
@@ -77,7 +82,7 @@ def plot_metric_comparison(metrics: dict[str, dict[str, float]], metric_keys: li
     return fig
 
 
-def plot_cost_sensitivity(robustness_df, metric: str = "std_pnl", title: str = "Transaction Cost Sensitivity") -> go.Figure:
+def plot_cost_sensitivity(robustness_df: pd.DataFrame, metric: str = "std_pnl", title: str = "Transaction Cost Sensitivity") -> go.Figure:
     fig = go.Figure()
     for agent_type in robustness_df["agent_type"].unique():
         data = robustness_df[robustness_df["agent_type"] == agent_type].groupby("kappa", as_index=False)[metric].mean().sort_values("kappa")
@@ -86,7 +91,7 @@ def plot_cost_sensitivity(robustness_df, metric: str = "std_pnl", title: str = "
     return fig
 
 
-def plot_episode_replay(results, episode_id: int, title: str | None = None) -> go.Figure:
+def plot_episode_replay(results: BacktestResults, episode_id: int, title: str | None = None) -> go.Figure:
     fig = make_subplots(rows=2, cols=2, subplot_titles=("Stock Price", "Hedge Ratio", "Step P&L", "Cumulative P&L and Cost"))
     data = results.step_df[results.step_df["episode_id"] == episode_id]
     if data.empty:
@@ -111,7 +116,7 @@ def plot_episode_replay(results, episode_id: int, title: str | None = None) -> g
     return fig
 
 
-def plot_robustness_heatmap(robustness_df, metric: str = "std_pnl", agent_type: str = "rl_agent", title: str | None = None) -> go.Figure:
+def plot_robustness_heatmap(robustness_df: pd.DataFrame, metric: str = "std_pnl", agent_type: str = "rl_agent", title: str | None = None) -> go.Figure:
     data = robustness_df[robustness_df["agent_type"] == agent_type]
     pivot = data.pivot(index="sigma", columns="kappa", values=metric).sort_index().sort_index(axis=1)
     fig = go.Figure(go.Heatmap(z=pivot.to_numpy(), x=[f"k={value:.4f}" for value in pivot.columns], y=[f"s={value:.2f}" for value in pivot.index], colorscale="RdBu_r"))
@@ -125,5 +130,5 @@ def save_figure(fig: go.Figure, output_dir: str, name: str) -> None:
     fig.write_html(os.path.join(output_dir, f"{name}.html"))
     try:
         fig.write_image(os.path.join(output_dir, f"{name}.png"))
-    except (ImportError, OSError, ValueError) as error:
+    except (ImportError, OSError, ValueError, RuntimeError) as error:
         logger.warning("Could not save PNG for %s: %s", name, error)

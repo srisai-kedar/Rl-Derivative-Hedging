@@ -107,3 +107,70 @@ def test_evaluate_cli_parses_arguments(monkeypatch):
     monkeypatch.setattr("sys.argv", ["evaluate.py", "--checkpoint", "model.zip", "--vecnorm", "stats.pkl", "--n-episodes", "3", "--skip-robustness"])
     evaluation.main()
     assert received["args"] == ("model.zip", "stats.pkl", "configs/training.yaml", 3, None, False)
+
+
+def test_save_load_round_trip_preserves_dtypes(backtest_results_fixture, tmp_path):
+    """Column dtypes must survive CSV serialisation and reload."""
+    from src.evaluation.backtest import load_results, save_results
+    from src.evaluation.metrics import compare_metrics
+
+    metrics = compare_metrics(
+        backtest_results_fixture,
+        primary="bs_delta",
+        baseline="zero_hedge",
+    )
+    save_results(backtest_results_fixture, metrics, str(tmp_path))
+    loaded, _ = load_results(str(tmp_path))
+
+    assert "episode_id" in loaded.episode_df.columns
+    assert "agent_type" in loaded.episode_df.columns
+    assert len(loaded.episode_df) == len(backtest_results_fixture.episode_df)
+
+
+def test_print_metrics_summary_outputs_to_stdout(backtest_results_fixture, capsys):
+    from src.evaluation.evaluate import _print_metrics_summary
+    from src.evaluation.metrics import compare_metrics
+
+    metrics = compare_metrics(
+        backtest_results_fixture,
+        primary="bs_delta",
+        baseline="zero_hedge",
+    )
+    _print_metrics_summary(metrics)
+    out = capsys.readouterr().out
+
+    assert "EVALUATION RESULTS" in out
+    assert "std_pnl_pct" in out
+    assert "Std P&L" in out
+
+
+def test_save_figure_graceful_kaleido_failure(tmp_path, monkeypatch):
+    """save_figure logs a warning and does not raise if PNG export fails."""
+    import pandas as pd
+
+    from src.evaluation.backtest import BacktestResults
+    from src.evaluation.plots import plot_pnl_distribution, save_figure
+
+    ep_df = pd.DataFrame(
+        [
+            {
+                "episode_id": 0,
+                "agent_type": "bs_delta",
+                "seed": 0,
+                "terminal_pnl": 0.1,
+                "total_cost": 0.01,
+                "n_steps": 30,
+            }
+        ]
+    )
+    st_df = pd.DataFrame()
+    results = BacktestResults(episode_df=ep_df, step_df=st_df)
+    fig = plot_pnl_distribution(results)
+
+    def bad_write_image(*args, **kwargs):
+        raise RuntimeError("kaleido not available")
+
+    monkeypatch.setattr(fig, "write_image", bad_write_image)
+
+    save_figure(fig, str(tmp_path), "test_fig")
+    assert (tmp_path / "test_fig.html").exists()

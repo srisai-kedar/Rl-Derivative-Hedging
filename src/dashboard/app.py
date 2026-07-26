@@ -15,8 +15,12 @@ from __future__ import annotations
 import glob
 import logging
 import os
+from typing import TYPE_CHECKING
 
 import streamlit as st
+
+if TYPE_CHECKING:
+    from src.evaluation.backtest import BacktestResults
 
 # st.set_page_config MUST be the first Streamlit call.
 st.set_page_config(
@@ -65,7 +69,7 @@ def discover_result_dirs(base_dir: str = "results") -> list[str]:
 
 
 @st.cache_data
-def load_results_cached(output_dir: str):
+def load_results_cached(output_dir: str) -> tuple[BacktestResults | None, dict | None]:
     """
     Load BacktestResults and metrics dict from a result directory.
 
@@ -179,7 +183,11 @@ def main() -> None:
         render_training_logs_page(selected_dir)
 
 
-def render_overview_page(results, metrics, show_zero_hedge: bool) -> None:
+def render_overview_page(
+    results: BacktestResults | None,
+    metrics: dict | None,
+    show_zero_hedge: bool,
+) -> None:
     """
     Render the overview page with metric cards and analysis charts.
     """
@@ -213,7 +221,7 @@ def render_overview_page(results, metrics, show_zero_hedge: bool) -> None:
     render_pnl_section(results, agents_to_show, metrics)
 
 
-def render_replay_page(results) -> None:
+def render_replay_page(results: BacktestResults | None) -> None:
     """Render the episode replay page."""
     from src.dashboard.components.episode_replay import render_episode_replay_page
 

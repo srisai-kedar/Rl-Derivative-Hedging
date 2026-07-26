@@ -11,7 +11,6 @@ from src.evaluation.plots import (
     plot_pnl_distribution,
 )
 
-
 PLOTLY_CONFIG = {"displayModeBar": True}
 
 

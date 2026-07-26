@@ -6,7 +6,6 @@ import streamlit as st
 
 from src.evaluation.metrics import compute_improvement_over_baseline
 
-
 CARD_SPECS: list[tuple[str, str, bool]] = [
     ("P&L Std Dev", "std_pnl", True),
     ("CVaR @ 95%", "cvar_95", False),
@@ -32,7 +31,7 @@ def render_metric_cards(
 
     cols = st.columns(len(CARD_SPECS), gap="small")
 
-    for col, (label, key, lower_is_better) in zip(cols, CARD_SPECS):
+    for col, (label, key, lower_is_better) in zip(cols, CARD_SPECS, strict=True):
         with col:
             primary_val = primary_m.get(key)
             baseline_val = baseline_m.get(key)

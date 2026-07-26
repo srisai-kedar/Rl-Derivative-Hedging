@@ -2,9 +2,11 @@ __pycache__/
 *.pyc
 .coverage
 .pytest-tmp*/
+.pytest-gate-cov-*/
 *.egg-info/
 .mypy_cache/
 .ruff_cache/
+.ipython/
 checkpoints/
 results/
 .env

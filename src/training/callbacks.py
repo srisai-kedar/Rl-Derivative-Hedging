@@ -90,7 +90,8 @@ class HedgingEvalCallback(BaseCallback):
 
             while not bool(done[0]):
                 action, _ = self.model.predict(obs, deterministic=True)
-                obs, reward, done, _ = self.eval_env.step(action)
+                step_result = self.eval_env.step(action)
+                obs, reward, done, _ = step_result
                 episode_reward += float(reward[0])
 
             episode_rewards.append(episode_reward)

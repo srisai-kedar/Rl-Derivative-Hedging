@@ -277,3 +277,25 @@ def test_no_nan_during_training(trained_run):
 
     for name, param in model.policy.named_parameters():
         assert not torch.any(torch.isnan(param)), f"NaN found in parameter: {name}"
+
+
+def test_load_env_for_inference(trained_run):
+    """load_env_for_inference returns a working VecNormalize with training=False."""
+    from stable_baselines3.common.vec_env import VecNormalize
+
+    from src.training.env_factory import load_env_for_inference
+    from src.training.hyperparams import load_config
+
+    tmp_path, config_path = trained_run
+    config = load_config(config_path)
+    vecnorm_path = str(list(tmp_path.rglob("final_vecnorm.pkl"))[0])
+
+    inf_env = load_env_for_inference(config.eval_environment, vecnorm_path, seed=0)
+
+    assert isinstance(inf_env, VecNormalize)
+    assert inf_env.training is False
+    assert inf_env.norm_reward is False
+
+    obs = inf_env.reset()
+    assert obs.shape == (1, 7)
+    inf_env.close()

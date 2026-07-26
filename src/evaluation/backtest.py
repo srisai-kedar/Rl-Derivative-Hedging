@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import logging
 import os
-from typing import Protocol, runtime_checkable
+from dataclasses import dataclass
+from typing import ClassVar, Protocol, runtime_checkable
 
 import numpy as np
 import pandas as pd
@@ -47,7 +47,7 @@ class BacktestResults:
     step_df: pd.DataFrame
 
     @classmethod
-    def from_episode_results(cls, results: list[EpisodeResult]) -> "BacktestResults":
+    def from_episode_results(cls, results: list[EpisodeResult]) -> BacktestResults:
         episode_rows: list[dict] = []
         step_rows: list[dict] = []
         for result in results:
@@ -69,7 +69,7 @@ class BacktestResults:
             step_df=pd.DataFrame(step_rows, columns=STEP_COLUMNS),
         )
 
-    def filter_agent(self, agent_type: str) -> "BacktestResults":
+    def filter_agent(self, agent_type: str) -> BacktestResults:
         """Return results for one policy only."""
         return BacktestResults(
             self.episode_df[self.episode_df["agent_type"] == agent_type].reset_index(drop=True),
@@ -81,7 +81,7 @@ class BacktestResults:
 class HedgingPolicy(Protocol):
     """Structural interface implemented by every evaluated hedging policy."""
 
-    name: str
+    name: ClassVar[str]
 
     def predict(self, obs: np.ndarray, info: dict) -> float:
         """Return a target hedge ratio in [0, 1]."""
@@ -91,7 +91,7 @@ class HedgingPolicy(Protocol):
 class RLAgentPolicy:
     """SAC policy evaluated on raw observations with saved normalisation stats."""
 
-    name = "rl_agent"
+    name: ClassVar[str] = "rl_agent"
 
     def __init__(self, model: SAC, vec_normalize: VecNormalize, deterministic: bool = True) -> None:
         self.model = model
@@ -104,14 +104,16 @@ class RLAgentPolicy:
 
     def _normalise(self, obs: np.ndarray) -> np.ndarray:
         epsilon = getattr(self.vn, "epsilon", 1e-8)
-        normalised = (obs - self.vn.obs_rms.mean) / np.sqrt(self.vn.obs_rms.var + epsilon)
+        obs_mean = self.vn.obs_rms.mean  # type: ignore[attr-defined]
+        obs_var = self.vn.obs_rms.var  # type: ignore[attr-defined]
+        normalised = (obs - obs_mean) / np.sqrt(obs_var + epsilon)
         return np.clip(normalised, -self.vn.clip_obs, self.vn.clip_obs).astype(np.float32)
 
 
 class BSDeltaPolicy:
     """Textbook Black-Scholes delta hedge baseline."""
 
-    name = "bs_delta"
+    name: ClassVar[str] = "bs_delta"
 
     def predict(self, obs: np.ndarray, info: dict) -> float:
         return float(np.clip(info["bs_delta"], 0.0, 1.0))
@@ -120,7 +122,7 @@ class BSDeltaPolicy:
 class ZeroHedgePolicy:
     """Unhedged short-call lower-bound reference policy."""
 
-    name = "zero_hedge"
+    name: ClassVar[str] = "zero_hedge"
 
     def predict(self, obs: np.ndarray, info: dict) -> float:
         return 0.0

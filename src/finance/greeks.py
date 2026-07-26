@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TypeAlias
 
 import numpy as np
 
+PriceFn = Callable[..., np.ndarray]
+Numeric: TypeAlias = float | np.ndarray
+
 
 def numerical_delta(
-    price_fn: Callable[..., np.ndarray],
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    price_fn: PriceFn,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
     dS: float = 0.01,
 ) -> np.ndarray:
     """Central finite difference delta: (f(S+dS) - f(S-dS)) / (2*dS)."""
@@ -23,12 +27,12 @@ def numerical_delta(
 
 
 def numerical_gamma(
-    price_fn: Callable[..., np.ndarray],
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    price_fn: PriceFn,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
     dS: float = 0.01,
 ) -> np.ndarray:
     """Central finite difference gamma."""
@@ -39,12 +43,12 @@ def numerical_gamma(
 
 
 def numerical_vega(
-    price_fn: Callable[..., np.ndarray],
-    S: float | np.ndarray,
-    K: float | np.ndarray,
-    r: float | np.ndarray,
-    sigma: float | np.ndarray,
-    T: float | np.ndarray,
+    price_fn: PriceFn,
+    S: Numeric,
+    K: Numeric,
+    r: Numeric,
+    sigma: Numeric,
+    T: Numeric,
     dsigma: float = 0.001,
 ) -> np.ndarray:
     """Central finite difference vega."""

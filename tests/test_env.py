@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from gymnasium.utils.env_checker import check_env
 
-from src.envs.reward import compute_step_reward
+from src.envs.reward import compute_step_reward, compute_terminal_reward
 
 
 def test_env_checker(env):
@@ -277,3 +277,13 @@ def test_reward_function_direction():
         transaction_cost=0.0,
     )
     assert r < 0, f"Expected negative reward, got {r}"
+
+    terminal = compute_terminal_reward(
+        option_value_prev=5.0,
+        S_prev=100.0,
+        S_terminal=110.0,
+        K=100.0,
+        hedge_pos=0.5,
+        transaction_cost=0.0,
+    )
+    assert isinstance(terminal, float)

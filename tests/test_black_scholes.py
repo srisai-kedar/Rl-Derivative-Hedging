@@ -166,3 +166,13 @@ def test_deep_itm_delta_approaches_one(bs_params):
 def test_deep_otm_delta_approaches_zero(bs_params):
     delta = call_delta(50, bs_params["K"], bs_params["r"], bs_params["sigma"], 1.0)
     assert float(delta) < 0.01
+
+
+def test_fixed_plus_proportional_cost():
+    from src.finance.transaction_costs import fixed_plus_proportional_cost
+
+    cost = fixed_plus_proportional_cost(0.0, 100.0, kappa_fixed=0.01, kappa_prop=0.001)
+    assert cost == 0.0
+
+    cost = fixed_plus_proportional_cost(0.5, 100.0, kappa_fixed=0.01, kappa_prop=0.001)
+    assert cost == pytest.approx(0.01 + 0.001 * 0.5 * 100.0)

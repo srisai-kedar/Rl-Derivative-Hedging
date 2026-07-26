@@ -32,7 +32,8 @@ class GBMSimulator:
         """Compute log-price increments from standard normal shocks."""
         drift = (self.mu - 0.5 * self.sigma**2) * self.dt
         diffusion = self.sigma * np.sqrt(self.dt) * Z
-        return drift + diffusion
+        increments: np.ndarray = drift + diffusion
+        return increments
 
     def generate_path(self, n_steps: int) -> np.ndarray:
         """Generate a single price path of shape (n_steps + 1,)."""

@@ -37,7 +37,7 @@ class HedgingEnv(gym.Env):
         "bs_delta",
     ]
 
-    metadata = {"render_modes": []}
+    metadata: dict[str, list[str]] = {"render_modes": []}
 
     def __init__(
         self,
@@ -203,10 +203,14 @@ class HedgingEnv(gym.Env):
             dtype=np.float32,
         )
 
-        obs = np.clip(obs, self.observation_space.low, self.observation_space.high)
+        obs = np.clip(
+            obs,
+            self.observation_space.low,  # type: ignore[attr-defined]
+            self.observation_space.high,  # type: ignore[attr-defined]
+        )
         return obs
 
-    def _build_info(self, cost: float, step_pnl: float) -> dict:
+    def _build_info(self, cost: float, step_pnl: float) -> dict[str, float | int]:
         """Build the info dict for the current step."""
         assert self.state is not None
 
