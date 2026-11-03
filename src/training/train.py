@@ -103,6 +103,7 @@ def build_callbacks(
         n_eval_episodes=cb_cfg.n_eval_episodes,
         save_path=checkpoint_dir,
         verbose=cb_cfg.verbose,
+        eval_seed_base=cb_cfg.eval_seed_base,
     )
 
     return CallbackList([metrics_cb, checkpoint_cb, eval_cb])

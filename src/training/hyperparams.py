@@ -21,6 +21,9 @@ class EnvironmentConfig:
     kappa: float = 0.001
     randomise_params: bool = False
     sigma_range: tuple[float, float] = (0.10, 0.40)
+    risk_aversion: float = 0.0
+    liquidate_at_expiry: bool = False
+    include_financing: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         """Return environment parameters suitable for ``HedgingEnv(**kwargs)``."""
@@ -34,6 +37,9 @@ class EnvironmentConfig:
             "kappa": self.kappa,
             "randomise_params": self.randomise_params,
             "sigma_range": tuple(self.sigma_range),
+            "risk_aversion": self.risk_aversion,
+            "liquidate_at_expiry": self.liquidate_at_expiry,
+            "include_financing": self.include_financing,
         }
 
 
@@ -74,6 +80,7 @@ class CallbackConfig:
     n_eval_episodes: int = 100
     save_freq: int = 100_000
     verbose: int = 1
+    eval_seed_base: int | None = None  # set (e.g. 10_000) for common-random-number evals
 
 
 @dataclass

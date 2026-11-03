@@ -113,7 +113,7 @@ def _style_dataframe(df: pd.DataFrame) -> pd.io.formats.style.Styler:
         styler = styler.highlight_max(subset=[col], color="#22c55e33", axis=0)
 
     return styler.format(
-        {col: "{:.4f}" for col in df.select_dtypes("float").columns},
+        dict.fromkeys(df.select_dtypes("float").columns, "{:.4f}"),
         na_rep="-",
     )
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections import deque
 
 import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
@@ -64,8 +65,14 @@ class HedgingEvalCallback(BaseCallback):
         n_eval_episodes: int,
         save_path: str,
         verbose: int = 1,
+        eval_seed_base: int | None = None,
     ) -> None:
         super().__init__(verbose)
+        # With ``eval_seed_base`` every evaluation round replays the *same*
+        # n_eval_episodes paths (common random numbers), so checkpoint-to-
+        # checkpoint differences reflect the policy, not path luck, and
+        # best-model selection is far less noisy.
+        self.eval_seed_base = eval_seed_base
         self.train_env = train_env
         self.eval_env = eval_env
         self.eval_freq = eval_freq
@@ -83,16 +90,19 @@ class HedgingEvalCallback(BaseCallback):
         sync_normalization_stats(source=self.train_env, target=self.eval_env)
 
         episode_rewards: list[float] = []
-        for _ in range(self.n_eval_episodes):
+        for episode_idx in range(self.n_eval_episodes):
+            if self.eval_seed_base is not None:
+                self.eval_env.seed(self.eval_seed_base + episode_idx)
             obs = self.eval_env.reset()
             done = np.array([False])
             episode_reward = 0.0
 
             while not bool(done[0]):
                 action, _ = self.model.predict(obs, deterministic=True)
-                step_result = self.eval_env.step(action)
-                obs, reward, done, _ = step_result
-                episode_reward += float(reward[0])
+                obs, reward, done, infos = self.eval_env.step(action)
+                # Select checkpoints on RAW P&L even if the training reward is
+                # risk-shaped (info["step_pnl"] is always the un-shaped value).
+                episode_reward += float(infos[0].get("step_pnl", reward[0]))
 
             episode_rewards.append(episode_reward)
 
@@ -130,8 +140,10 @@ class HedgingMetricsCallback(BaseCallback):
     def __init__(self, window: int = 100, verbose: int = 0) -> None:
         super().__init__(verbose)
         self.window = window
-        self._terminal_pnls: list[float] = []
-        self._total_costs: list[float] = []
+        # deque(maxlen=w): O(1) append with automatic eviction of the oldest
+        # element (list.pop(0) was O(w)).
+        self._terminal_pnls: deque[float] = deque(maxlen=window)
+        self._total_costs: deque[float] = deque(maxlen=window)
 
     def _on_step(self) -> bool:
         infos = self.locals.get("infos", [])
@@ -141,10 +153,6 @@ class HedgingMetricsCallback(BaseCallback):
 
             self._terminal_pnls.append(float(info["terminal_pnl"]))
             self._total_costs.append(float(info["total_cost"]))
-
-            if len(self._terminal_pnls) > self.window:
-                self._terminal_pnls.pop(0)
-                self._total_costs.pop(0)
 
             self.logger.record(
                 "hedging/terminal_pnl_mean",
