@@ -54,7 +54,16 @@ def _print_metrics_summary(metrics: dict[str, dict[str, float]]) -> None:
         )
 
 
-def evaluate(checkpoint_path: str, vecnorm_path: str, config_path: str = "configs/training.yaml", n_episodes: int = 1000, output_dir: str | None = None, run_robustness: bool = True) -> None:
+def evaluate(
+    checkpoint_path: str,
+    vecnorm_path: str,
+    config_path: str = "configs/training.yaml",
+    n_episodes: int = 1000,
+    output_dir: str | None = None,
+    run_robustness: bool = True,
+    batch_size: int = 128,
+    legacy: bool = False,
+) -> None:
     """Evaluate SAC alongside BS-delta and zero-hedge baselines."""
     from src.evaluation.backtest import HedgingPolicy
 
@@ -68,7 +77,13 @@ def evaluate(checkpoint_path: str, vecnorm_path: str, config_path: str = "config
             BSDeltaPolicy(),
             ZeroHedgePolicy(),
         ]
-        results = run_backtest(policies, config.eval_environment, n_episodes)
+        results = run_backtest(
+            policies,
+            config.eval_environment,
+            n_episodes,
+            batch_size=batch_size,
+            legacy=legacy,
+        )
         metrics = compare_metrics(results)
         _print_metrics_summary(metrics)
         save_results(results, metrics, output_dir)
@@ -78,7 +93,15 @@ def evaluate(checkpoint_path: str, vecnorm_path: str, config_path: str = "config
         save_figure(plot_metric_comparison(metrics), plots_dir, "metric_comparison")
         save_figure(plot_episode_replay(results, episode_id=0), plots_dir, "episode_replay")
         if run_robustness:
-            robustness_df = run_robustness_sweep(policies, config.eval_environment, [0.0, 0.0005, 0.001, 0.002, 0.005, 0.010], [0.10, 0.15, 0.20, 0.25, 0.30, 0.40], n_episodes=200)
+            robustness_df = run_robustness_sweep(
+                policies,
+                config.eval_environment,
+                [0.0, 0.0005, 0.001, 0.002, 0.005, 0.010],
+                [0.10, 0.15, 0.20, 0.25, 0.30, 0.40],
+                n_episodes=200,
+                batch_size=batch_size,
+                legacy=legacy,
+            )
             robustness_df.to_csv(os.path.join(output_dir, "robustness.csv"), index=False)
             save_figure(plot_cost_sensitivity(robustness_df), plots_dir, "cost_sensitivity")
             for agent in robustness_df["agent_type"].unique():
@@ -96,8 +119,19 @@ def main() -> None:
     parser.add_argument("--n-episodes", type=int, default=1000, help="Episodes per policy")
     parser.add_argument("--output-dir", default=None, help="Directory for evaluation artefacts")
     parser.add_argument("--skip-robustness", action="store_true", help="Skip the robustness sweep")
+    parser.add_argument("--batch-size", type=int, default=128, help="Batch size for vectorised backtest")
+    parser.add_argument("--legacy-backtest", action="store_true", help="Use legacy sequential backtester")
     args = parser.parse_args()
-    evaluate(args.checkpoint, args.vecnorm, args.config, args.n_episodes, args.output_dir, not args.skip_robustness)
+    evaluate(
+        checkpoint_path=args.checkpoint,
+        vecnorm_path=args.vecnorm,
+        config_path=args.config,
+        n_episodes=args.n_episodes,
+        output_dir=args.output_dir,
+        run_robustness=not args.skip_robustness,
+        batch_size=args.batch_size,
+        legacy=args.legacy_backtest,
+    )
 
 
 if __name__ == "__main__":

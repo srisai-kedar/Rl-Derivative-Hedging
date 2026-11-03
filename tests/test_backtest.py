@@ -1,11 +1,30 @@
+from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from types import SimpleNamespace
+import pytest
 
-from src.evaluation.backtest import BSDeltaPolicy, BacktestResults, ZeroHedgePolicy, load_results, run_backtest, save_results
+from src.evaluation.backtest import (
+    BacktestResults,
+    BSDeltaPolicy,
+    ZeroHedgePolicy,
+    load_results,
+    run_backtest,
+    save_results,
+)
 from src.evaluation.metrics import compare_metrics, compute_all_metrics
-from src.evaluation.plots import (plot_cost_sensitivity, plot_episode_replay, plot_hedge_ratio_over_time, plot_metric_comparison, plot_pnl_distribution, plot_robustness_heatmap)
+from src.evaluation.plots import (
+    plot_cost_sensitivity,
+    plot_episode_replay,
+    plot_hedge_ratio_over_time,
+    plot_metric_comparison,
+    plot_pnl_distribution,
+    plot_robustness_heatmap,
+)
 
 
 def _backtest(fast_eval_config, n_episodes):
@@ -103,10 +122,15 @@ def test_evaluate_cli_parses_arguments(monkeypatch):
     import src.evaluation.evaluate as evaluation
 
     received = {}
-    monkeypatch.setattr(evaluation, "evaluate", lambda *args: received.setdefault("args", args))
+    monkeypatch.setattr(evaluation, "evaluate", lambda **kwargs: received.setdefault("kwargs", kwargs))
     monkeypatch.setattr("sys.argv", ["evaluate.py", "--checkpoint", "model.zip", "--vecnorm", "stats.pkl", "--n-episodes", "3", "--skip-robustness"])
     evaluation.main()
-    assert received["args"] == ("model.zip", "stats.pkl", "configs/training.yaml", 3, None, False)
+    assert received["kwargs"]["checkpoint_path"] == "model.zip"
+    assert received["kwargs"]["vecnorm_path"] == "stats.pkl"
+    assert received["kwargs"]["config_path"] == "configs/training.yaml"
+    assert received["kwargs"]["n_episodes"] == 3
+    assert received["kwargs"]["run_robustness"] is False
+    assert received["kwargs"]["legacy"] is False
 
 
 def test_save_load_round_trip_preserves_dtypes(backtest_results_fixture, tmp_path):
@@ -146,8 +170,6 @@ def test_print_metrics_summary_outputs_to_stdout(backtest_results_fixture, capsy
 
 def test_save_figure_graceful_kaleido_failure(tmp_path, monkeypatch):
     """save_figure logs a warning and does not raise if PNG export fails."""
-    import pandas as pd
-
     from src.evaluation.backtest import BacktestResults
     from src.evaluation.plots import plot_pnl_distribution, save_figure
 
@@ -174,3 +196,51 @@ def test_save_figure_graceful_kaleido_failure(tmp_path, monkeypatch):
 
     save_figure(fig, str(tmp_path), "test_fig")
     assert (tmp_path / "test_fig.html").exists()
+
+
+def test_batched_matches_legacy_exact_for_baselines(fast_eval_config):
+    """New batched and legacy implementations produce identical DataFrames on baselines."""
+    policies = [BSDeltaPolicy(), ZeroHedgePolicy()]
+    legacy_res = run_backtest(policies, fast_eval_config, n_episodes=10, show_progress=False, legacy=True)
+    batched_res = run_backtest(policies, fast_eval_config, n_episodes=10, show_progress=False, legacy=False, batch_size=4)
+    pd.testing.assert_frame_equal(legacy_res.episode_df, batched_res.episode_df)
+    pd.testing.assert_frame_equal(legacy_res.step_df, batched_res.step_df)
+
+
+def test_batched_matches_legacy_for_rl_agent_checkpoint(fast_eval_config):
+    """Verify batched matches legacy on actual trained SAC checkpoint."""
+    ckpt_path = Path("checkpoints/sac_hedging_20260721_002714/best_model.zip")
+    vecnorm_path = Path("checkpoints/sac_hedging_20260721_002714/best_vecnorm.pkl")
+    if not (ckpt_path.exists() and vecnorm_path.exists()):
+        pytest.skip("Real SAC checkpoint not found")
+
+    from stable_baselines3 import SAC
+
+    from src.evaluation.backtest import RLAgentPolicy
+    from src.training.env_factory import load_env_for_inference
+
+    model = SAC.load(str(ckpt_path))
+    vn = load_env_for_inference(fast_eval_config, str(vecnorm_path), seed=42)
+    try:
+        policy = RLAgentPolicy(model, vn, deterministic=True)
+        legacy_res = run_backtest([policy], fast_eval_config, n_episodes=10, show_progress=False, legacy=True)
+        batched_res = run_backtest([policy], fast_eval_config, n_episodes=10, show_progress=False, legacy=False, batch_size=4)
+
+        # Prices must match exactly
+        np.testing.assert_allclose(legacy_res.step_df["price"].to_numpy(), batched_res.step_df["price"].to_numpy(), atol=1e-7)
+        # Hedge ratios and PnLs match within documented float32 tolerance (1e-5)
+        np.testing.assert_allclose(legacy_res.step_df["hedge_ratio"].to_numpy(), batched_res.step_df["hedge_ratio"].to_numpy(), atol=1e-5)
+        np.testing.assert_allclose(legacy_res.step_df["step_pnl"].to_numpy(), batched_res.step_df["step_pnl"].to_numpy(), atol=1e-5)
+        np.testing.assert_allclose(legacy_res.episode_df["terminal_pnl"].to_numpy(), batched_res.episode_df["terminal_pnl"].to_numpy(), atol=1e-5)
+        np.testing.assert_allclose(legacy_res.episode_df["total_cost"].to_numpy(), batched_res.episode_df["total_cost"].to_numpy(), atol=1e-5)
+    finally:
+        vn.close()
+
+
+def test_predict_batch_interface():
+    bs = BSDeltaPolicy()
+    zh = ZeroHedgePolicy()
+    obs_batch = np.zeros((3, 7), dtype=np.float32)
+    infos = [{"bs_delta": 0.25}, {"bs_delta": 0.50}, {"bs_delta": 0.75}]
+    np.testing.assert_allclose(bs.predict_batch(obs_batch, infos), [0.25, 0.50, 0.75])
+    np.testing.assert_allclose(zh.predict_batch(obs_batch, infos), [0.0, 0.0, 0.0])
