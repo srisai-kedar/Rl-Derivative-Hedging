@@ -5,7 +5,7 @@ Uses Optuna with TPE sampler and Median pruner. Run with:
     python -m src.training.hpo --trials 20 --config configs/training.yaml
 
 Each trial trains SAC for HPO_TIMESTEPS steps and evaluates on 50 episodes.
-Total wall-clock time: approximately 10–30 minutes for 20 trials on CPU,
+Total wall-clock time: approximately 10-30 minutes for 20 trials on CPU,
 depending on n_envs and hardware.
 
 Results are printed to stdout and optionally saved to an SQLite database
