@@ -13,7 +13,6 @@ from src.finance.black_scholes import (
 )
 from src.finance.greeks import numerical_delta, numerical_gamma
 
-
 PUT_CALL_PARITY_CASES = [
     (100, 100, 1.0, 0.05, 0.20),
     (110, 100, 1.0, 0.05, 0.20),

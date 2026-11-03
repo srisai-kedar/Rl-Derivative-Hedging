@@ -8,8 +8,6 @@ import os
 import subprocess
 import sys
 
-import pytest
-
 
 def test_ruff_no_violations():
     """ruff check src/ must return zero violations."""

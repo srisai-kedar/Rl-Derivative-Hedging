@@ -268,8 +268,8 @@ def test_tensorboard_log_dir_created(trained_run):
 
 def test_no_nan_during_training(trained_run):
     """Verify no NaN values appear in model parameters after short training."""
-    from stable_baselines3 import SAC
     import torch
+    from stable_baselines3 import SAC
 
     tmp_path, _ = trained_run
     checkpoint_dir = list(tmp_path.rglob("final_model.zip"))[0].parent

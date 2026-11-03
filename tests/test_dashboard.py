@@ -480,9 +480,9 @@ def test_component_branches_with_fake_streamlit(monkeypatch, backtest_results_fi
     """Exercise component branches not reached by AppTest smoke tests."""
     import pandas as pd
 
-    from src.evaluation.backtest import BacktestResults
     import src.dashboard.components.episode_replay as episode_replay
     import src.dashboard.components.experiment_table as experiment_table
+    from src.evaluation.backtest import BacktestResults
 
     fake_st = _FakeStreamlit()
     monkeypatch.setattr(episode_replay, "st", fake_st)

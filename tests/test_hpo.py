@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
 import optuna
+import pytest
 
 
 def test_suggest_sac_params_returns_required_keys():

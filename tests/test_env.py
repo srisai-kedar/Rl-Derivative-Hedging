@@ -1,7 +1,6 @@
 """Tests for the Gymnasium hedging environment."""
 
 import numpy as np
-import pytest
 from gymnasium.utils.env_checker import check_env
 
 from src.envs.reward import compute_step_reward, compute_terminal_reward
