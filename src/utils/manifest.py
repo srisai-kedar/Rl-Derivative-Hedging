@@ -105,22 +105,32 @@ def get_dependency_versions() -> dict[str, str | None]:
     return versions
 
 
+def _to_json_safe(obj: Any) -> Any:
+    """Recursively convert dataclasses, SimpleNamespaces, dicts, and iterables to JSON-safe primitives."""
+    import dataclasses
+
+    if hasattr(obj, "as_dict") and callable(obj.as_dict):
+        return _to_json_safe(obj.as_dict())
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return _to_json_safe(dataclasses.asdict(obj))
+    if isinstance(obj, dict):
+        return {str(k): _to_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_json_safe(x) for x in obj]
+    if hasattr(obj, "__dict__"):
+        return _to_json_safe(vars(obj))
+    if isinstance(obj, (int, float, bool, type(None))):
+        return obj
+    return str(obj)
+
+
 def canonicalize_config(config: Any) -> tuple[dict[str, Any], str]:
     """Convert config to dictionary and compute canonical JSON SHA-256."""
-    if hasattr(config, "as_dict"):
-        cfg_dict = config.as_dict()
-    elif hasattr(config, "__dict__"):
-        cfg_dict = {
-            k: getattr(config, k).as_dict() if hasattr(getattr(config, k), "as_dict") else getattr(config, k)
-            for k in dir(config)
-            if not k.startswith("_") and not callable(getattr(config, k))
-        }
-    elif isinstance(config, dict):
-        cfg_dict = config
-    else:
-        cfg_dict = {"raw": str(config)}
+    cfg_dict = _to_json_safe(config)
+    if not isinstance(cfg_dict, dict):
+        cfg_dict = {"config": cfg_dict}
 
-    canonical_json = json.dumps(cfg_dict, sort_keys=True, default=str)
+    canonical_json = json.dumps(cfg_dict, sort_keys=True)
     cfg_hash = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
     return cfg_dict, cfg_hash
 
