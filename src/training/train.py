@@ -19,6 +19,7 @@ from src.training.callbacks import (
 )
 from src.training.env_factory import build_eval_env, build_training_envs
 from src.training.hyperparams import TrainingConfig, load_config
+from src.utils.manifest import write_manifest
 
 logging.basicConfig(
     level=logging.INFO,
@@ -161,6 +162,27 @@ def train(config_path: str = "configs/training.yaml") -> None:
             model.save(final_model_path)
             train_env.save(final_vecnorm_path)
             logger.info("Final model and VecNormalize saved to %s", checkpoint_dir)
+
+            # Record manifest with all saved checkpoint files
+            checkpoint_files = [
+                os.path.join(checkpoint_dir, f)
+                for f in os.listdir(checkpoint_dir)
+                if f.endswith((".zip", ".pkl"))
+            ]
+            write_manifest(
+                output_dir=checkpoint_dir,
+                run_type="training",
+                config=config,
+                seed=config.run.seed,
+                checkpoint_files=checkpoint_files,
+            )
+            write_manifest(
+                output_dir=results_dir,
+                run_type="training",
+                config=config,
+                seed=config.run.seed,
+                checkpoint_files=checkpoint_files,
+            )
     finally:
         if train_env is not None:
             train_env.close()

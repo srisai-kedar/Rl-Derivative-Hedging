@@ -130,13 +130,19 @@ def load_env_for_inference(
     env_config: EnvironmentConfig,
     vecnorm_path: str,
     seed: int = 0,
+    allow_unverified: bool = False,
 ) -> VecNormalize:
     """
     Load saved VecNormalize statistics around a fresh evaluation environment.
 
     The loaded environment is ready for deterministic inference/evaluation and
-    returns raw rewards.
+    returns raw rewards. If a run_manifest.json exists in the checkpoint directory,
+    cryptographic integrity is verified.
     """
+    from src.utils.manifest import verify_checkpoint_integrity
+
+    verify_checkpoint_integrity(checkpoint_path=vecnorm_path, vecnorm_path=vecnorm_path, allow_unverified=allow_unverified)
+
     eval_env = DummyVecEnv([_make_env_fn(env_config, rank=0, base_seed=seed)])
     vec_env = VecNormalize.load(vecnorm_path, eval_env)
     vec_env.training = False

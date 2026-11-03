@@ -29,6 +29,7 @@ from src.evaluation.plots import (
 )
 from src.training.env_factory import load_env_for_inference
 from src.training.hyperparams import load_config
+from src.utils.manifest import verify_checkpoint_integrity, write_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -63,14 +64,28 @@ def evaluate(
     run_robustness: bool = True,
     batch_size: int = 128,
     legacy: bool = False,
+    allow_unverified: bool = False,
 ) -> None:
     """Evaluate SAC alongside BS-delta and zero-hedge baselines."""
     from src.evaluation.backtest import HedgingPolicy
 
     config = load_config(config_path)
     output_dir = output_dir or os.path.join(config.results_dir, f"evaluation_{datetime.now():%Y%m%d_%H%M%S}")
+
+    # Check cryptographic integrity if manifest is present
+    verify_checkpoint_integrity(
+        checkpoint_path=checkpoint_path,
+        vecnorm_path=vecnorm_path,
+        allow_unverified=allow_unverified,
+    )
+
     model = SAC.load(checkpoint_path)
-    vec_normalize = load_env_for_inference(config.eval_environment, vecnorm_path, seed=config.run.seed)
+    vec_normalize = load_env_for_inference(
+        config.eval_environment,
+        vecnorm_path,
+        seed=config.run.seed,
+        allow_unverified=allow_unverified,
+    )
     try:
         policies: list[HedgingPolicy] = [
             RLAgentPolicy(model, vec_normalize),
@@ -106,7 +121,17 @@ def evaluate(
             save_figure(plot_cost_sensitivity(robustness_df), plots_dir, "cost_sensitivity")
             for agent in robustness_df["agent_type"].unique():
                 save_figure(plot_robustness_heatmap(robustness_df, agent_type=agent), plots_dir, f"robustness_heatmap_{agent}")
-        logger.info("Evaluation artefacts saved to %s", output_dir)
+
+        # Save evaluation run manifest
+        write_manifest(
+            output_dir=output_dir,
+            run_type="evaluation",
+            config=config,
+            seed=config.run.seed,
+            checkpoint_files=[checkpoint_path, vecnorm_path],
+            extra_metadata={"n_episodes": n_episodes, "output_dir": output_dir},
+        )
+        logger.info("Evaluation artefacts and run manifest saved to %s", output_dir)
     finally:
         vec_normalize.close()
 
@@ -121,6 +146,7 @@ def main() -> None:
     parser.add_argument("--skip-robustness", action="store_true", help="Skip the robustness sweep")
     parser.add_argument("--batch-size", type=int, default=128, help="Batch size for vectorised backtest")
     parser.add_argument("--legacy-backtest", action="store_true", help="Use legacy sequential backtester")
+    parser.add_argument("--allow-unverified", action="store_true", help="Allow loading checkpoint even if manifest hash check fails")
     args = parser.parse_args()
     evaluate(
         checkpoint_path=args.checkpoint,
@@ -131,6 +157,7 @@ def main() -> None:
         run_robustness=not args.skip_robustness,
         batch_size=args.batch_size,
         legacy=args.legacy_backtest,
+        allow_unverified=args.allow_unverified,
     )
 
 
