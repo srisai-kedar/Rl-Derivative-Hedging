@@ -327,12 +327,13 @@ def _run_backtest_legacy(
     env_config: EnvironmentConfig,
     n_episodes: int,
     show_progress: bool = True,
+    seed_offset: int = 0,
 ) -> BacktestResults:
     """Legacy sequential backtester (reference implementation)."""
     if n_episodes <= 0:
         raise ValueError("n_episodes must be positive")
     all_results: list[EpisodeResult] = []
-    seeds = list(range(n_episodes))
+    seeds = list(range(seed_offset, seed_offset + n_episodes))
     for policy in policies:
         env = HedgingEnv(**env_config.as_dict())
         logger.info("Running %s episodes for policy: %s (legacy)", n_episodes, policy.name)
@@ -356,6 +357,7 @@ def run_backtest(
     show_progress: bool = True,
     batch_size: int = 128,
     legacy: bool = False,
+    seed_offset: int = 0,
 ) -> BacktestResults:
     """Run all policies on identical seed-indexed price paths.
 
@@ -373,13 +375,21 @@ def run_backtest(
         Batch size for lock-step vectorised evaluation (default 128).
     legacy:
         If True, run the legacy sequential backtester.
+    seed_offset:
+        First shared episode seed; the default preserves seeds ``0..n-1``.
     """
     if n_episodes <= 0:
         raise ValueError("n_episodes must be positive")
     if legacy:
-        return _run_backtest_legacy(policies, env_config, n_episodes, show_progress=show_progress)
+        return _run_backtest_legacy(
+            policies,
+            env_config,
+            n_episodes,
+            show_progress=show_progress,
+            seed_offset=seed_offset,
+        )
 
-    seeds = list(range(n_episodes))
+    seeds = list(range(seed_offset, seed_offset + n_episodes))
     ep_dfs: list[pd.DataFrame] = []
     step_dfs: list[pd.DataFrame] = []
 
@@ -408,6 +418,7 @@ def run_robustness_sweep(
     n_episodes: int = 200,
     batch_size: int = 128,
     legacy: bool = False,
+    seed_offset: int = 0,
 ) -> pd.DataFrame:
     """Backtest every policy over the requested volatility/cost grid."""
     from src.evaluation.metrics import compute_all_metrics
@@ -425,6 +436,7 @@ def run_robustness_sweep(
             show_progress=False,
             batch_size=batch_size,
             legacy=legacy,
+            seed_offset=seed_offset,
         )
         for policy in policies:
             rows.append(

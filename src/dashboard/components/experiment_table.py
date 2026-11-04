@@ -87,7 +87,19 @@ def _collect_rows(base_dir: str) -> list[dict]:
                 or int(bs_m.get("n_episodes", 0)),
             }
         )
+        confidence_intervals = metrics.get("confidence_intervals", {})
+        if confidence_intervals:
+            mean_ci = confidence_intervals.get("mean_pnl", {})
+            rows[-1]["RL Mean P&L CI"] = _format_interval(mean_ci.get("primary"))
+            rows[-1]["RL-BS Mean P&L CI"] = _format_interval(mean_ci.get("diff"))
     return rows
+
+
+def _format_interval(interval: dict | None) -> str | None:
+    """Format an optional CI interval for the experiment table."""
+    if not interval:
+        return None
+    return f"[{interval['lo']:.4f}, {interval['hi']:.4f}]"
 
 
 def _style_dataframe(df: pd.DataFrame) -> pd.io.formats.style.Styler:

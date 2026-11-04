@@ -121,6 +121,13 @@ def test_compare_with_ci_rejects_mismatched_seeds():
         uncertainty.compare_with_ci(_episode_df(drop_seed=3), n_boot=200)
 
 
+def test_compare_with_ci_rejects_any_policy_with_different_seed_set():
+    frame = _episode_df()
+    frame = frame[~((frame.agent_type == "bs_delta") & (frame.seed == 4))]
+    with pytest.raises(ValueError, match="identical seed"):
+        uncertainty.compare_with_ci(frame, n_boot=200)
+
+
 def test_compare_with_ci_rejects_missing_policy_and_columns():
     with pytest.raises(ValueError, match="Need both"):
         uncertainty.compare_with_ci(_episode_df().query("agent_type == 'rl_agent'"), n_boot=200)

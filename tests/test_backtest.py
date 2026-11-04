@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -111,10 +112,30 @@ def test_evaluate_orchestrates_and_saves_outputs(monkeypatch, backtest_results_f
         for kappa in [0.0, 0.001] for sigma in [0.2, 0.3] for agent in ["rl_agent", "bs_delta", "zero_hedge"]
     ])
     config = SimpleNamespace(eval_environment=fast_eval_config, results_dir=str(tmp_path), run=SimpleNamespace(seed=0))
+    evaluation_results = BacktestResults(
+        episode_df=pd.concat(
+            [
+                backtest_results_fixture.episode_df,
+                backtest_results_fixture.episode_df.query("agent_type == 'bs_delta'").assign(
+                    agent_type="rl_agent"
+                ),
+            ],
+            ignore_index=True,
+        ),
+        step_df=pd.concat(
+            [
+                backtest_results_fixture.step_df,
+                backtest_results_fixture.step_df.query("agent_type == 'bs_delta'").assign(
+                    agent_type="rl_agent"
+                ),
+            ],
+            ignore_index=True,
+        ),
+    )
     monkeypatch.setattr(evaluation, "load_config", lambda _: config)
     monkeypatch.setattr(evaluation.SAC, "load", lambda _: model)
     monkeypatch.setattr(evaluation, "load_env_for_inference", lambda *args, **kwargs: vec_normalize)
-    monkeypatch.setattr(evaluation, "run_backtest", lambda *args, **kwargs: backtest_results_fixture)
+    monkeypatch.setattr(evaluation, "run_backtest", lambda *args, **kwargs: evaluation_results)
     monkeypatch.setattr(evaluation, "run_robustness_sweep", lambda *args, **kwargs: robustness)
     monkeypatch.setattr(evaluation, "save_figure", lambda fig, directory, name: saved_figures.append(name))
 
@@ -122,6 +143,9 @@ def test_evaluate_orchestrates_and_saves_outputs(monkeypatch, backtest_results_f
 
     assert (tmp_path / "episode_data.csv").exists()
     assert (tmp_path / "metrics.json").exists()
+    saved_metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
+    assert "confidence_intervals" in saved_metrics
+    assert "rl_agent" in saved_metrics and "improvement" in saved_metrics
     assert (tmp_path / "robustness.csv").exists()
     assert {"pnl_distribution", "cost_sensitivity", "robustness_heatmap_rl_agent"} <= set(saved_figures)
 
@@ -131,7 +155,23 @@ def test_evaluate_cli_parses_arguments(monkeypatch):
 
     received = {}
     monkeypatch.setattr(evaluation, "evaluate", lambda **kwargs: received.setdefault("kwargs", kwargs))
-    monkeypatch.setattr("sys.argv", ["evaluate.py", "--checkpoint", "model.zip", "--vecnorm", "stats.pkl", "--n-episodes", "3", "--skip-robustness"])
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "evaluate.py",
+            "--checkpoint", "model.zip",
+            "--vecnorm", "stats.pkl",
+            "--n-episodes", "3",
+            "--skip-robustness",
+            "--seed-offset", "10",
+            "--robustness-episodes", "7",
+            "--kappa-grid", "0.0", "0.1",
+            "--sigma-grid", "0.2", "0.3",
+            "--n-boot", "200",
+            "--market-model", "heston",
+            "--market-model-kwargs", '{"kappa": 1.5}',
+        ],
+    )
     evaluation.main()
     assert received["kwargs"]["checkpoint_path"] == "model.zip"
     assert received["kwargs"]["vecnorm_path"] == "stats.pkl"
@@ -139,6 +179,25 @@ def test_evaluate_cli_parses_arguments(monkeypatch):
     assert received["kwargs"]["n_episodes"] == 3
     assert received["kwargs"]["run_robustness"] is False
     assert received["kwargs"]["legacy"] is False
+    assert received["kwargs"]["seed_offset"] == 10
+    assert received["kwargs"]["robustness_episodes"] == 7
+    assert received["kwargs"]["kappa_grid"] == [0.0, 0.1]
+    assert received["kwargs"]["sigma_grid"] == [0.2, 0.3]
+    assert received["kwargs"]["n_boot"] == 200
+    assert received["kwargs"]["market_model"] == "heston"
+    assert received["kwargs"]["market_model_kwargs"] == {"kappa": 1.5}
+
+
+def test_seed_offset_is_shared_by_batched_and_legacy(fast_eval_config):
+    policies = [BSDeltaPolicy(), ZeroHedgePolicy()]
+    legacy = run_backtest(
+        policies, fast_eval_config, n_episodes=3, show_progress=False, legacy=True, seed_offset=10
+    )
+    batched = run_backtest(
+        policies, fast_eval_config, n_episodes=3, show_progress=False, legacy=False, seed_offset=10
+    )
+    assert set(legacy.episode_df["seed"]) == {10, 11, 12}
+    pd.testing.assert_frame_equal(legacy.episode_df, batched.episode_df)
 
 
 def test_save_load_round_trip_preserves_dtypes(backtest_results_fixture, tmp_path):

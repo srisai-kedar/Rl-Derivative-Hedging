@@ -280,6 +280,23 @@ def test_collect_rows_returns_empty_for_empty_dir(tmp_path):
     assert rows == []
 
 
+def test_collect_rows_accepts_legacy_metrics_without_confidence_intervals(tmp_path):
+    from src.dashboard.components.experiment_table import _collect_rows
+
+    run_dir = tmp_path / "results" / "old_run"
+    run_dir.mkdir(parents=True)
+    (run_dir / "episode_data.csv").write_text("episode_id,agent_type\n0,rl_agent\n", encoding="utf-8")
+    (run_dir / "metrics.json").write_text(
+        '{"rl_agent": {"mean_pnl": 1.0}, "bs_delta": {"mean_pnl": 0.5}}',
+        encoding="utf-8",
+    )
+
+    rows = _collect_rows(str(tmp_path / "results"))
+
+    assert rows[0]["RL P&L Std"] is None
+    assert "RL Mean P&L CI" not in rows[0]
+
+
 def test_sidebar_with_result_dir(monkeypatch, mock_results_dir):
     """Sidebar returns selected result directory and display settings."""
     import src.dashboard.app as dashboard_app
