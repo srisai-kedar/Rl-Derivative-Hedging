@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 from datetime import datetime
@@ -110,7 +111,7 @@ def build_callbacks(
     return CallbackList([metrics_cb, checkpoint_cb, eval_cb])
 
 
-def train(config_path: str = "configs/training.yaml") -> None:
+def train(config_path: str = "configs/training.yaml", run_info_path: str | None = None) -> None:
     """
     Run SAC training and always save final model/VecNormalize stats as a pair.
 
@@ -187,6 +188,33 @@ def train(config_path: str = "configs/training.yaml") -> None:
                     checkpoint_files=checkpoint_files,
                     extra_metadata=metadata,
                 )
+        if run_info_path is not None:
+            info_path = os.path.abspath(run_info_path)
+            os.makedirs(os.path.dirname(info_path), exist_ok=True)
+            with open(info_path, "w", encoding="utf-8") as file:
+                json.dump(
+                    {
+                        "status": run_status,
+                        "checkpoint_dir": os.path.abspath(checkpoint_dir)
+                        if checkpoint_dir is not None
+                        else None,
+                        "checkpoint_path": os.path.abspath(
+                            os.path.join(checkpoint_dir, "final_model.zip")
+                        )
+                        if checkpoint_dir is not None
+                        else None,
+                        "vecnorm_path": os.path.abspath(
+                            os.path.join(checkpoint_dir, "final_vecnorm.pkl")
+                        )
+                        if checkpoint_dir is not None
+                        else None,
+                        "results_dir": os.path.abspath(results_dir)
+                        if results_dir is not None
+                        else None,
+                    },
+                    file,
+                    indent=2,
+                )
         if train_env is not None:
             train_env.close()
         if eval_env is not None:
@@ -202,8 +230,13 @@ def main() -> None:
         default="configs/training.yaml",
         help="Path to training config YAML",
     )
+    parser.add_argument(
+        "--run-info",
+        default=None,
+        help="Write the exact checkpoint/results directories and status as JSON",
+    )
     args = parser.parse_args()
-    train(config_path=args.config)
+    train(config_path=args.config, run_info_path=args.run_info)
 
 
 if __name__ == "__main__":
