@@ -341,3 +341,57 @@ def test_load_env_for_inference_rejects_vecnorm_dimension_mismatch(tmp_path):
             str(vecnorm_file),
         )
     source_env.close()
+
+
+def test_interrupted_training_refreshes_manifest(tmp_path, monkeypatch):
+    """An interrupted learn still leaves a manifest covering saved finals."""
+    import json
+    from types import SimpleNamespace
+
+    import src.training.train as training
+
+    checkpoint_dir = tmp_path / "checkpoints"
+    results_dir = tmp_path / "results"
+    config = SimpleNamespace(
+        run=SimpleNamespace(seed=0, n_envs=1, progress_bar=False, total_timesteps=1),
+        environment={},
+        eval_environment={},
+        vec_normalize={},
+        tb_log_name="test",
+    )
+
+    class FakeEnv:
+        def save(self, path):
+            Path(path).write_bytes(b"vecnorm")
+
+        def close(self):
+            return None
+
+    class FakeModel:
+        def learn(self, **kwargs):
+            raise KeyboardInterrupt
+
+        def save(self, path):
+            Path(f"{path}.zip").write_bytes(b"model")
+
+    monkeypatch.setattr(training, "load_config", lambda _: config)
+    def fake_setup_output_dirs(_):
+        checkpoint_dir.mkdir()
+        results_dir.mkdir()
+        return str(checkpoint_dir), str(results_dir)
+
+    monkeypatch.setattr(training, "setup_output_dirs", fake_setup_output_dirs)
+    monkeypatch.setattr(training, "build_training_envs", lambda **kwargs: FakeEnv())
+    monkeypatch.setattr(training, "build_eval_env", lambda **kwargs: FakeEnv())
+    monkeypatch.setattr(training, "build_model", lambda *args, **kwargs: FakeModel())
+    monkeypatch.setattr(training, "build_callbacks", lambda *args, **kwargs: None)
+
+    with pytest.raises(KeyboardInterrupt):
+        training.train("ignored.yaml")
+
+    with open(checkpoint_dir / "run_manifest.json", encoding="utf-8") as file:
+        manifest = json.load(file)
+    assert manifest["extra"]["status"] == "interrupted"
+    assert set(manifest["checkpoint_files"]) == {"final_model.zip", "final_vecnorm.pkl"}
+    assert set(manifest["checkpoint_hashes"]) == set(manifest["checkpoint_files"])
+    assert (results_dir / "run_manifest.json").exists()

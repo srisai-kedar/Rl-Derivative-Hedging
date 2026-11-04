@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+from collections.abc import Mapping
 from datetime import datetime
 
 from stable_baselines3 import SAC
@@ -35,11 +36,7 @@ from src.training.observation import (
     vecnormalize_observation_dimension,
     vecnormalize_stats_dimension,
 )
-from src.utils.manifest import (
-    validate_manifest_environment,
-    verify_checkpoint_integrity,
-    write_manifest,
-)
+from src.utils.manifest import write_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +73,8 @@ def evaluate(
     legacy: bool = False,
     allow_unverified: bool = False,
     allow_manifest_mismatch: bool = False,
+    require_manifest: bool = False,
+    expected_sha256: Mapping[str, str] | str | None = None,
 ) -> None:
     """Evaluate SAC alongside BS-delta and zero-hedge baselines."""
     from src.evaluation.backtest import HedgingPolicy
@@ -83,28 +82,18 @@ def evaluate(
     config = load_config(config_path)
     output_dir = output_dir or os.path.join(config.results_dir, f"evaluation_{datetime.now():%Y%m%d_%H%M%S}")
 
-    # Check cryptographic integrity if manifest is present
-    verify_checkpoint_integrity(
-        checkpoint_path=checkpoint_path,
-        vecnorm_path=vecnorm_path,
-        allow_unverified=allow_unverified,
-    )
-    validate_manifest_environment(
-        checkpoint_path,
-        config.eval_environment,
-        allow_mismatch=allow_manifest_mismatch,
-    )
-
-    model = SAC.load(checkpoint_path)
     vec_normalize = load_env_for_inference(
         config.eval_environment,
         vecnorm_path,
         seed=config.run.seed,
         allow_unverified=allow_unverified,
-        model=model,
         allow_manifest_mismatch=allow_manifest_mismatch,
+        checkpoint_path=checkpoint_path,
+        require_manifest=require_manifest,
+        expected_sha256=expected_sha256,
     )
     try:
+        model = SAC.load(checkpoint_path)
         validate_observation_dimensions(
             env_dimension=vecnormalize_observation_dimension(vec_normalize),
             model_dimension=model_observation_dimension(model),
@@ -176,7 +165,21 @@ def main() -> None:
     parser.add_argument("--legacy-backtest", action="store_true", help="Use legacy sequential backtester")
     parser.add_argument("--allow-unverified", action="store_true", help="Allow loading checkpoint even if manifest hash check fails")
     parser.add_argument("--allow-manifest-mismatch", action="store_true", help="Warn instead of raising when manifest environment settings differ")
+    parser.add_argument("--require-manifest", action="store_true", help="Fail if run_manifest.json or required checkpoint hashes are missing")
+    parser.add_argument(
+        "--expected-sha256",
+        action="append",
+        default=[],
+        metavar="FILE=HASH",
+        help="Out-of-band SHA-256 anchor; repeat for model and VecNormalize files",
+    )
     args = parser.parse_args()
+    expected_sha256: dict[str, str] = {}
+    for entry in args.expected_sha256:
+        if "=" not in entry:
+            parser.error("--expected-sha256 must use FILE=HASH format")
+        file_name, file_hash = entry.split("=", 1)
+        expected_sha256[file_name] = file_hash
     evaluate(
         checkpoint_path=args.checkpoint,
         vecnorm_path=args.vecnorm,
@@ -188,6 +191,8 @@ def main() -> None:
         legacy=args.legacy_backtest,
         allow_unverified=args.allow_unverified,
         allow_manifest_mismatch=args.allow_manifest_mismatch,
+        require_manifest=args.require_manifest,
+        expected_sha256=expected_sha256 or None,
     )
 
 

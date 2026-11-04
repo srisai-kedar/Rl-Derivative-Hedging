@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import os
 import pickle
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import cast
 
 import gymnasium as gym
@@ -139,6 +139,9 @@ def load_env_for_inference(
     allow_unverified: bool = False,
     model: object | None = None,
     allow_manifest_mismatch: bool = False,
+    checkpoint_path: str | None = None,
+    require_manifest: bool = False,
+    expected_sha256: Mapping[str, str] | str | None = None,
 ) -> VecNormalize:
     """
     Load saved VecNormalize statistics around a fresh evaluation environment.
@@ -152,11 +155,18 @@ def load_env_for_inference(
         verify_checkpoint_integrity,
     )
 
-    verify_checkpoint_integrity(checkpoint_path=vecnorm_path, vecnorm_path=vecnorm_path, allow_unverified=allow_unverified)
+    verify_checkpoint_integrity(
+        checkpoint_path=checkpoint_path,
+        vecnorm_path=vecnorm_path,
+        allow_unverified=allow_unverified,
+        require_manifest=require_manifest,
+        expected_sha256=expected_sha256,
+    )
     validate_manifest_environment(
         vecnorm_path,
         env_config,
         allow_mismatch=allow_manifest_mismatch,
+        checkpoint_path=checkpoint_path,
     )
 
     eval_env = DummyVecEnv([_make_env_fn(env_config, rank=0, base_seed=seed)])

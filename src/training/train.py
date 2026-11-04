@@ -122,6 +122,9 @@ def train(config_path: str = "configs/training.yaml") -> None:
     train_env: VecNormalize | None = None
     eval_env: VecNormalize | None = None
     model: SAC | None = None
+    checkpoint_dir: str | None = None
+    results_dir: str | None = None
+    run_status = "interrupted"
 
     try:
         checkpoint_dir, results_dir = setup_output_dirs(config)
@@ -156,34 +159,34 @@ def train(config_path: str = "configs/training.yaml") -> None:
                 reset_num_timesteps=True,
                 progress_bar=config.run.progress_bar,
             )
+            run_status = "completed"
         finally:
-            final_model_path = os.path.join(checkpoint_dir, "final_model")
-            final_vecnorm_path = os.path.join(checkpoint_dir, "final_vecnorm.pkl")
-            model.save(final_model_path)
-            train_env.save(final_vecnorm_path)
-            logger.info("Final model and VecNormalize saved to %s", checkpoint_dir)
-
-            # Record manifest with all saved checkpoint files
-            checkpoint_files = [
-                os.path.join(checkpoint_dir, f)
-                for f in os.listdir(checkpoint_dir)
-                if f.endswith((".zip", ".pkl"))
-            ]
-            write_manifest(
-                output_dir=checkpoint_dir,
-                run_type="training",
-                config=config,
-                seed=config.run.seed,
-                checkpoint_files=checkpoint_files,
-            )
-            write_manifest(
-                output_dir=results_dir,
-                run_type="training",
-                config=config,
-                seed=config.run.seed,
-                checkpoint_files=checkpoint_files,
-            )
+            if model is not None and train_env is not None and checkpoint_dir is not None:
+                final_model_path = os.path.join(checkpoint_dir, "final_model")
+                final_vecnorm_path = os.path.join(checkpoint_dir, "final_vecnorm.pkl")
+                model.save(final_model_path)
+                train_env.save(final_vecnorm_path)
+                logger.info("Final model and VecNormalize saved to %s", checkpoint_dir)
     finally:
+        if checkpoint_dir is not None and results_dir is not None:
+            checkpoint_files = [
+                os.path.join(checkpoint_dir, filename)
+                for filename in os.listdir(checkpoint_dir)
+                if filename.endswith((".zip", ".pkl"))
+            ]
+            metadata = {
+                "status": run_status,
+                "checkpoint_files": [os.path.basename(path) for path in checkpoint_files],
+            }
+            for output_dir in (checkpoint_dir, results_dir):
+                write_manifest(
+                    output_dir=output_dir,
+                    run_type="training",
+                    config=config,
+                    seed=config.run.seed,
+                    checkpoint_files=checkpoint_files,
+                    extra_metadata=metadata,
+                )
         if train_env is not None:
             train_env.close()
         if eval_env is not None:
