@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 from pathlib import Path
 
 import yaml
 
-from scripts.multiseed import _deep_update, run_multiseed
+try:
+    from scripts.multiseed import _deep_update, run_multiseed
+except ModuleNotFoundError:  # pragma: no cover - used by importlib-based test runners
+    _module_spec = importlib.util.spec_from_file_location(
+        "multiseed_script", Path(__file__).parent.parent / "scripts" / "multiseed.py"
+    )
+    if _module_spec is None or _module_spec.loader is None:
+        raise
+    _multiseed = importlib.util.module_from_spec(_module_spec)
+    _module_spec.loader.exec_module(_multiseed)
+    _deep_update = _multiseed._deep_update
+    run_multiseed = _multiseed.run_multiseed
 
 
 def run_experiment(
@@ -40,7 +52,9 @@ def run_experiment(
     config_file = root / "experiment_config.yaml"
     if not dry_run:
         root.mkdir(parents=True, exist_ok=True)
-        config_file.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+        config_file.write_text(
+            yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
+        )
         (root / "SMOKE_NOT_A_RESULT.txt").write_text(
             "SMOKE: not a result\n" if smoke else "", encoding="utf-8"
         )
@@ -61,7 +75,9 @@ def run_experiment(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--experiment", required=True, help="Path to an experiments/*.yaml spec")
+    parser.add_argument(
+        "--experiment", required=True, help="Path to an experiments/*.yaml spec"
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--smoke", action="store_true")

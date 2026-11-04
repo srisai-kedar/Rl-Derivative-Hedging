@@ -285,7 +285,9 @@ def test_collect_rows_accepts_legacy_metrics_without_confidence_intervals(tmp_pa
 
     run_dir = tmp_path / "results" / "old_run"
     run_dir.mkdir(parents=True)
-    (run_dir / "episode_data.csv").write_text("episode_id,agent_type\n0,rl_agent\n", encoding="utf-8")
+    (run_dir / "episode_data.csv").write_text(
+        "episode_id,agent_type\n0,rl_agent\n", encoding="utf-8"
+    )
     (run_dir / "metrics.json").write_text(
         '{"rl_agent": {"mean_pnl": 1.0}, "bs_delta": {"mean_pnl": 0.5}}',
         encoding="utf-8",
@@ -338,7 +340,9 @@ def test_quick_eval_stores_session_state(monkeypatch, backtest_results_fixture):
 
     fake_st = _FakeStreamlit()
     monkeypatch.setattr(dashboard_app, "st", fake_st)
-    monkeypatch.setattr(backtest, "run_backtest", lambda *args, **kwargs: backtest_results_fixture)
+    monkeypatch.setattr(
+        backtest, "run_backtest", lambda *args, **kwargs: backtest_results_fixture
+    )
 
     dashboard_app._run_quick_eval_into_session_state()
 
@@ -381,7 +385,9 @@ def test_main_routes_all_pages(monkeypatch, backtest_results_fixture):
     )
 
     for page in ["Overview", "Episode Replay", "Experiments", "Training Logs"]:
-        monkeypatch.setattr(dashboard_app, "_render_sidebar", lambda page=page: (page, "run", True))
+        monkeypatch.setattr(
+            dashboard_app, "_render_sidebar", lambda page=page: (page, "run", True)
+        )
         dashboard_app.main()
 
     assert routed == [
@@ -392,7 +398,9 @@ def test_main_routes_all_pages(monkeypatch, backtest_results_fixture):
     ]
 
 
-def test_main_uses_quick_eval_when_no_selected_dir(monkeypatch, backtest_results_fixture):
+def test_main_uses_quick_eval_when_no_selected_dir(
+    monkeypatch, backtest_results_fixture
+):
     """main falls back to session_state quick-eval data."""
     import src.dashboard.app as dashboard_app
 
@@ -402,11 +410,15 @@ def test_main_uses_quick_eval_when_no_selected_dir(monkeypatch, backtest_results
     routed = []
 
     monkeypatch.setattr(dashboard_app, "st", fake_st)
-    monkeypatch.setattr(dashboard_app, "_render_sidebar", lambda: ("Overview", "", False))
+    monkeypatch.setattr(
+        dashboard_app, "_render_sidebar", lambda: ("Overview", "", False)
+    )
     monkeypatch.setattr(
         dashboard_app,
         "render_overview_page",
-        lambda results, metrics, show_zero: routed.append((results, metrics, show_zero)),
+        lambda results, metrics, show_zero: routed.append(
+            (results, metrics, show_zero)
+        ),
     )
 
     dashboard_app.main()
@@ -425,7 +437,9 @@ def test_overview_page_empty_and_loaded(monkeypatch, backtest_results_fixture):
     metrics = {"bs_delta": {}, "zero_hedge": {}}
 
     monkeypatch.setattr(dashboard_app, "st", fake_st)
-    monkeypatch.setattr(metric_cards, "render_metric_cards", lambda m: delegated.append(("cards", m)))
+    monkeypatch.setattr(
+        metric_cards, "render_metric_cards", lambda m: delegated.append(("cards", m))
+    )
     monkeypatch.setattr(
         pnl_chart,
         "render_pnl_section",
@@ -453,7 +467,9 @@ def test_replay_and_experiments_delegate(monkeypatch, backtest_results_fixture):
     monkeypatch.setattr(
         episode_replay,
         "render_episode_replay_page",
-        lambda results: delegated.append(("replay", results is backtest_results_fixture)),
+        lambda results: delegated.append(
+            ("replay", results is backtest_results_fixture)
+        ),
     )
     monkeypatch.setattr(
         experiment_table,
@@ -519,15 +535,31 @@ def test_component_branches_with_fake_streamlit(monkeypatch, backtest_results_fi
     rl_step = rl_step[rl_step["agent_type"] == "bs_delta"].copy()
     rl_step["agent_type"] = "rl_agent"
     rl_results = BacktestResults(
-        episode_df=pd.concat([backtest_results_fixture.episode_df, rl_episode], ignore_index=True),
-        step_df=pd.concat([backtest_results_fixture.step_df, rl_step], ignore_index=True),
+        episode_df=pd.concat(
+            [backtest_results_fixture.episode_df, rl_episode], ignore_index=True
+        ),
+        step_df=pd.concat(
+            [backtest_results_fixture.step_df, rl_step], ignore_index=True
+        ),
     )
     episode_replay.render_episode_replay_page(rl_results)
 
     df = pd.DataFrame(
         [
-            {"Run": "a", "RL P&L Std": 2.0, "BS P&L Std": 1.0, "RL Mean Cost": 0.2, "Improvement %": -1.0},
-            {"Run": "b", "RL P&L Std": 1.0, "BS P&L Std": 1.2, "RL Mean Cost": 0.1, "Improvement %": 5.0},
+            {
+                "Run": "a",
+                "RL P&L Std": 2.0,
+                "BS P&L Std": 1.0,
+                "RL Mean Cost": 0.2,
+                "Improvement %": -1.0,
+            },
+            {
+                "Run": "b",
+                "RL P&L Std": 1.0,
+                "BS P&L Std": 1.2,
+                "RL Mean Cost": 0.1,
+                "Improvement %": 5.0,
+            },
         ]
     )
     styled = experiment_table._style_dataframe(df)

@@ -180,9 +180,8 @@ def theta_call(
     d2 = _d2(S, K, r, sigma, T)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        theta = (
-            -(S * _norm_pdf(d1) * sigma) / (2.0 * np.sqrt(T))
-            - r * K * np.exp(-r * T) * ndtr(d2)
-        )
+        theta = -(S * _norm_pdf(d1) * sigma) / (2.0 * np.sqrt(T)) - r * K * np.exp(
+            -r * T
+        ) * ndtr(d2)
 
     return np.where(T == 0, 0.0, theta)

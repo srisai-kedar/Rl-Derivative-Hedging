@@ -43,8 +43,14 @@ def test_call_delta_bounds_and_put_call_delta_relation(s, k, r, sig, t):
 @SETTINGS
 @given(K, R, SIG, T, st.floats(20.0, 400.0), st.floats(0.01, 50.0))
 def test_call_price_and_delta_monotone_in_spot(k, r, sig, t, s, bump):
-    c1, c2 = float(call_price(s, k, r, sig, t)), float(call_price(s + bump, k, r, sig, t))
-    d1, d2 = float(call_delta(s, k, r, sig, t)), float(call_delta(s + bump, k, r, sig, t))
+    c1, c2 = (
+        float(call_price(s, k, r, sig, t)),
+        float(call_price(s + bump, k, r, sig, t)),
+    )
+    d1, d2 = (
+        float(call_delta(s, k, r, sig, t)),
+        float(call_delta(s + bump, k, r, sig, t)),
+    )
     assert c2 >= c1 - 1e-9
     assert d2 >= d1 - 1e-9
 

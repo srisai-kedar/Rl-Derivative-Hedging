@@ -111,9 +111,7 @@ def build_eval_env(
     Evaluation returns raw rewards, so ``norm_reward`` is disabled while
     observation normalization is synced from the current training environment.
     """
-    eval_env = DummyVecEnv(
-        [_make_env_fn(env_config, rank=0, base_seed=seed + 10_000)]
-    )
+    eval_env = DummyVecEnv([_make_env_fn(env_config, rank=0, base_seed=seed + 10_000)])
     vec_env = VecNormalize(
         eval_env,
         norm_obs=train_env.norm_obs,
@@ -177,7 +175,9 @@ def load_env_for_inference(
         vec_env = pickle.load(file)
     validate_observation_dimensions(
         env_dimension=int(eval_env.observation_space.shape[0]),
-        model_dimension=model_observation_dimension(model) if model is not None else None,
+        model_dimension=model_observation_dimension(model)
+        if model is not None
+        else None,
         vecnorm_dimension=vecnormalize_stats_dimension(vec_env),
         observation_mode=env_config.observation_mode,
     )

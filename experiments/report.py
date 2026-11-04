@@ -31,7 +31,16 @@ def collect_report_rows(root: str | Path) -> list[dict[str, Any]]:
             }
         )
     if not rows:
-        return [{"run": "NOT RUN", "mean_pnl": "NOT RUN", "std_pnl": "NOT RUN", "mean_pnl_ci": "NOT RUN", "rl_bs_diff_ci": "NOT RUN", "manifest": False}]
+        return [
+            {
+                "run": "NOT RUN",
+                "mean_pnl": "NOT RUN",
+                "std_pnl": "NOT RUN",
+                "mean_pnl_ci": "NOT RUN",
+                "rl_bs_diff_ci": "NOT RUN",
+                "manifest": False,
+            }
+        ]
     return rows
 
 
@@ -45,10 +54,12 @@ def render_markdown(rows: list[dict[str, Any]], label: str | None = None) -> str
     lines = ["# Experiment report", ""]
     if label:
         lines.extend([label, ""])
-    lines.extend([
-        "| Run | Mean P&L | Std P&L | Mean P&L 95% CI | RL-BS diff 95% CI | Manifest |",
-        "|---|---:|---:|---|---|---|",
-    ])
+    lines.extend(
+        [
+            "| Run | Mean P&L | Std P&L | Mean P&L 95% CI | RL-BS diff 95% CI | Manifest |",
+            "|---|---:|---:|---|---|---|",
+        ]
+    )
     for row in rows:
         lines.append(
             f"| {row['run']} | {row['mean_pnl']} | {row['std_pnl']} | "
@@ -65,7 +76,11 @@ def main() -> int:
     parser.add_argument("--json-output", default=None)
     args = parser.parse_args()
     rows = collect_report_rows(args.root)
-    label = "SMOKE: not a result" if (Path(args.root) / "SMOKE_NOT_A_RESULT.txt").is_file() else None
+    label = (
+        "SMOKE: not a result"
+        if (Path(args.root) / "SMOKE_NOT_A_RESULT.txt").is_file()
+        else None
+    )
     markdown = render_markdown(rows, label=label)
     print(markdown, end="")
     if args.output:

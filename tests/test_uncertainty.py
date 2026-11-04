@@ -17,8 +17,12 @@ def test_row_statistics_match_metrics_module(seed):
     x = np.random.default_rng(seed).standard_t(3, size=257)
     s = pd.Series(x)
     assert uncertainty.stat_mean(x[None, :])[0] == pytest.approx(s.mean())
-    assert uncertainty.stat_std(x[None, :])[0] == pytest.approx(metrics.compute_hedging_error(s))
-    assert uncertainty.make_stat_cvar(0.05)(x[None, :])[0] == pytest.approx(metrics.compute_cvar(s))
+    assert uncertainty.stat_std(x[None, :])[0] == pytest.approx(
+        metrics.compute_hedging_error(s)
+    )
+    assert uncertainty.make_stat_cvar(0.05)(x[None, :])[0] == pytest.approx(
+        metrics.compute_cvar(s)
+    )
     assert uncertainty.make_stat_cvar(0.10)(x[None, :])[0] == pytest.approx(
         metrics.compute_cvar(s, alpha=0.10)
     )
@@ -55,11 +59,15 @@ def test_paired_diff_detects_real_shift_and_ignores_noise():
     rng = np.random.default_rng(4)
     base = rng.normal(0, 1, 400)
     shifted = base + 0.5 + rng.normal(0, 0.1, 400)
-    d, p = uncertainty.paired_bootstrap_diff(shifted, base, uncertainty.stat_mean, n_boot=2000)
+    d, p = uncertainty.paired_bootstrap_diff(
+        shifted, base, uncertainty.stat_mean, n_boot=2000
+    )
     assert d.excludes_zero()
     assert p < 0.01
     same = base + rng.normal(0, 0.1, 400)
-    d0, p0 = uncertainty.paired_bootstrap_diff(same, base, uncertainty.stat_mean, n_boot=2000)
+    d0, p0 = uncertainty.paired_bootstrap_diff(
+        same, base, uncertainty.stat_mean, n_boot=2000
+    )
     assert not d0.excludes_zero()
     assert p0 > 0.05
 
@@ -69,7 +77,9 @@ def test_pairing_reduces_variance_versus_unpaired():
     common = rng.normal(0, 3, 400)  # shared path noise
     a = common + rng.normal(0, 0.2, 400) + 0.1
     b = common + rng.normal(0, 0.2, 400)
-    paired, _ = uncertainty.paired_bootstrap_diff(a, b, uncertainty.stat_mean, n_boot=2000)
+    paired, _ = uncertainty.paired_bootstrap_diff(
+        a, b, uncertainty.stat_mean, n_boot=2000
+    )
     ia = uncertainty.bootstrap_ci(a, uncertainty.stat_mean, n_boot=2000)
     ib = uncertainty.bootstrap_ci(b, uncertainty.stat_mean, n_boot=2000)
     unpaired_width = np.hypot(ia.hi - ia.lo, ib.hi - ib.lo)
@@ -130,7 +140,9 @@ def test_compare_with_ci_rejects_any_policy_with_different_seed_set():
 
 def test_compare_with_ci_rejects_missing_policy_and_columns():
     with pytest.raises(ValueError, match="Need both"):
-        uncertainty.compare_with_ci(_episode_df().query("agent_type == 'rl_agent'"), n_boot=200)
+        uncertainty.compare_with_ci(
+            _episode_df().query("agent_type == 'rl_agent'"), n_boot=200
+        )
     with pytest.raises(ValueError, match="missing columns"):
         uncertainty.compare_with_ci(pd.DataFrame({"x": [1]}), n_boot=200)
 
@@ -141,7 +153,9 @@ def test_aggregate_run_metrics_t_interval(tmp_path):
     paths = []
     for i, v in enumerate(vals):
         p = tmp_path / f"m{i}.json"
-        p.write_text(json.dumps({"rl_agent": {"std_pnl": v, "cost_efficiency": float("inf")}}))
+        p.write_text(
+            json.dumps({"rl_agent": {"std_pnl": v, "cost_efficiency": float("inf")}})
+        )
         paths.append(p)
     out = uncertainty.aggregate_run_metrics(paths)
     row = out.loc["std_pnl"]

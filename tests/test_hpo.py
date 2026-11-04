@@ -64,9 +64,9 @@ def test_hpo_objective_definitions():
 
     rewards = [1.0, 2.0, 3.0, 4.0]
     assert score_episode_rewards(rewards) == pytest.approx(2.5)
-    assert score_episode_rewards(rewards, "mean_minus_lambda_std", 1.0) == pytest.approx(
-        2.5 - np.std(rewards)
-    )
+    assert score_episode_rewards(
+        rewards, "mean_minus_lambda_std", 1.0
+    ) == pytest.approx(2.5 - np.std(rewards))
     assert score_episode_rewards(rewards, "cvar") == pytest.approx(1.0)
     with pytest.raises(ValueError, match="objective"):
         score_episode_rewards(rewards, "unknown")
@@ -81,15 +81,23 @@ def test_optional_environment_search_dimensions():
     )
     assert 0.0 <= params["risk_aversion"] <= 1.0
     assert params["observation_mode"] in {
-        "full", "no_greeks", "price_only", "no_bs_delta", "no_bs_delta_no_sigma"
+        "full",
+        "no_greeks",
+        "price_only",
+        "no_bs_delta",
+        "no_bs_delta_no_sigma",
     }
 
 
-def test_run_hpo_resumes_and_writes_metadata(monkeypatch, fast_training_config, tmp_path):
+def test_run_hpo_resumes_and_writes_metadata(
+    monkeypatch, fast_training_config, tmp_path
+):
     import src.training.hpo as hpo_module
     from src.training.hpo import run_hpo
 
-    monkeypatch.setattr(hpo_module, "objective", lambda trial, *args, **kwargs: float(trial.number))
+    monkeypatch.setattr(
+        hpo_module, "objective", lambda trial, *args, **kwargs: float(trial.number)
+    )
     storage = f"sqlite:///{tmp_path / 'study.db'}"
     first = run_hpo(
         config_path=fast_training_config,

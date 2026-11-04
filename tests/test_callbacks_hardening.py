@@ -49,7 +49,9 @@ def test_non_terminal_infos_are_ignored():
 
 
 def test_hedging_eval_callback_replays_identical_paths_with_eval_seed_base(tmp_path):
-    train_env = build_training_envs(EnvironmentConfig(), VecNormalizeConfig(), n_envs=1, seed=42)
+    train_env = build_training_envs(
+        EnvironmentConfig(), VecNormalizeConfig(), n_envs=1, seed=42
+    )
     eval_env = build_eval_env(EnvironmentConfig(), train_env, seed=42)
 
     mock_model = MagicMock()
@@ -83,7 +85,9 @@ def test_hedging_eval_callback_replays_identical_paths_with_eval_seed_base(tmp_p
 
 
 def test_hedging_eval_callback_uses_raw_step_pnl_when_risk_aversion_set(tmp_path):
-    train_env = build_training_envs(EnvironmentConfig(), VecNormalizeConfig(), n_envs=1, seed=42)
+    train_env = build_training_envs(
+        EnvironmentConfig(), VecNormalizeConfig(), n_envs=1, seed=42
+    )
     eval_env = build_eval_env(EnvironmentConfig(risk_aversion=2.0), train_env, seed=42)
 
     mock_model = MagicMock()

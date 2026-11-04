@@ -24,8 +24,12 @@ def test_gbm_environment_path_is_bit_identical_for_explicit_seed():
 @pytest.mark.parametrize(
     "simulator_factory",
     [
-        lambda seed: HestonSimulator(100.0, 0.05, 0.04, 2.0, 0.04, 0.3, -0.7, 1 / 252, seed),
-        lambda seed: MertonJumpDiffusionSimulator(100.0, 0.05, 0.20, 1.0, -0.05, 0.10, 1 / 252, seed),
+        lambda seed: HestonSimulator(
+            100.0, 0.05, 0.04, 2.0, 0.04, 0.3, -0.7, 1 / 252, seed
+        ),
+        lambda seed: MertonJumpDiffusionSimulator(
+            100.0, 0.05, 0.20, 1.0, -0.05, 0.10, 1 / 252, seed
+        ),
     ],
 )
 def test_simulators_reproduce_and_separate_explicit_seeds(simulator_factory):
@@ -50,8 +54,12 @@ def test_environment_seed_reproducibility_and_distinct_paths(
     market_model, market_model_kwargs
 ):
     """Environment market-model paths follow the explicit seed contract."""
-    env_a = HedgingEnv(market_model=market_model, market_model_kwargs=market_model_kwargs)
-    env_b = HedgingEnv(market_model=market_model, market_model_kwargs=market_model_kwargs)
+    env_a = HedgingEnv(
+        market_model=market_model, market_model_kwargs=market_model_kwargs
+    )
+    env_b = HedgingEnv(
+        market_model=market_model, market_model_kwargs=market_model_kwargs
+    )
     env_a.reset(seed=5)
     env_b.reset(seed=5)
     np.testing.assert_array_equal(env_a.state.price_path, env_b.state.price_path)

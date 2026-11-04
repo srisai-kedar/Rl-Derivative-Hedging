@@ -49,7 +49,9 @@ def test_manifest_round_trip(tmp_path):
     assert "config" in data
     assert "sha256" in data["config"]
     assert data["checkpoint_hashes"]["model.zip"] == compute_file_sha256(dummy_model)
-    assert data["checkpoint_hashes"]["vecnorm.pkl"] == compute_file_sha256(dummy_vecnorm)
+    assert data["checkpoint_hashes"]["vecnorm.pkl"] == compute_file_sha256(
+        dummy_vecnorm
+    )
 
 
 def test_tamper_detection(tmp_path):
@@ -72,7 +74,9 @@ def test_tamper_detection(tmp_path):
     # Tamper with model file
     model_file.write_bytes(b"tampered_model_content_evil")
 
-    with pytest.raises(IntegrityError, match="Checkpoint integrity verification failed"):
+    with pytest.raises(
+        IntegrityError, match="Checkpoint integrity verification failed"
+    ):
         verify_checkpoint_integrity(model_file, vecnorm_file)
 
     # With allow_unverified=True, raises no exception
@@ -116,10 +120,14 @@ def test_out_of_band_hash_detects_manifest_replacement(tmp_path):
         model_file.name: compute_file_sha256(model_file),
         vecnorm_file.name: compute_file_sha256(vecnorm_file),
     }
-    write_manifest(tmp_path, "training", {}, checkpoint_files=[model_file, vecnorm_file])
+    write_manifest(
+        tmp_path, "training", {}, checkpoint_files=[model_file, vecnorm_file]
+    )
 
     model_file.write_bytes(b"replacement model")
-    write_manifest(tmp_path, "training", {}, checkpoint_files=[model_file, vecnorm_file])
+    write_manifest(
+        tmp_path, "training", {}, checkpoint_files=[model_file, vecnorm_file]
+    )
 
     with pytest.raises(IntegrityError, match="Out-of-band SHA-256"):
         verify_checkpoint_integrity(model_file, vecnorm_file, expected_sha256=expected)
@@ -151,7 +159,9 @@ def test_legacy_checkpoint_compatibility(tmp_path):
 
 def test_behaviour_outside_git_repo():
     """get_git_info gracefully reports non-git environments without crashing."""
-    with patch("subprocess.check_output", side_effect=Exception("Not a git repository")):
+    with patch(
+        "subprocess.check_output", side_effect=Exception("Not a git repository")
+    ):
         info = get_git_info()
         assert info["is_git_repo"] is False
         assert info["commit"] is None

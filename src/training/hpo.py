@@ -77,7 +77,9 @@ def _net_arch_from_str(arch_str: str) -> list[int]:
 
 
 def score_episode_rewards(
-    rewards: list[float], objective: str = HPO_OBJECTIVE, risk_lambda: float = HPO_RISK_LAMBDA
+    rewards: list[float],
+    objective: str = HPO_OBJECTIVE,
+    risk_lambda: float = HPO_RISK_LAMBDA,
 ) -> float:
     """Score episode rewards using a mean, mean-minus-risk, or CVaR objective."""
     if not rewards:
@@ -106,8 +108,10 @@ def _eval_seed_block(
     """Return the evaluation seeds, with legacy mode reproducing 0..N-1."""
     if n_episodes <= 0:
         raise ValueError("n_episodes must be positive")
-    return list(range(n_episodes)) if legacy_seed_behavior else list(
-        range(seed_start, seed_start + n_episodes)
+    return (
+        list(range(n_episodes))
+        if legacy_seed_behavior
+        else list(range(seed_start, seed_start + n_episodes))
     )
 
 
@@ -175,10 +179,17 @@ def _write_study_metadata(
         "objective": {"name": objective_name, "risk_lambda": risk_lambda},
         "search_space": {
             "sac": [
-                "learning_rate", "batch_size", "tau", "gamma", "ent_coef", "net_arch_str"
+                "learning_rate",
+                "batch_size",
+                "tau",
+                "gamma",
+                "ent_coef",
+                "net_arch_str",
             ],
             "risk_aversion": search_risk_aversion,
-            "observation_mode": list(HPO_OBSERVATION_MODES) if search_observation_mode else None,
+            "observation_mode": list(HPO_OBSERVATION_MODES)
+            if search_observation_mode
+            else None,
         },
         "study": {
             "trials_completed": len(study.trials) if study is not None else 0,
@@ -244,9 +255,15 @@ def objective(
     )
     from src.training.hyperparams import load_config
 
-    eval_seed_start = HPO_EVAL_SEED_START if eval_seed_start is None else eval_seed_start
-    n_eval_episodes = HPO_N_EVAL_EPISODES if n_eval_episodes is None else n_eval_episodes
-    n_seeds_per_trial = HPO_N_SEEDS_PER_TRIAL if n_seeds_per_trial is None else n_seeds_per_trial
+    eval_seed_start = (
+        HPO_EVAL_SEED_START if eval_seed_start is None else eval_seed_start
+    )
+    n_eval_episodes = (
+        HPO_N_EVAL_EPISODES if n_eval_episodes is None else n_eval_episodes
+    )
+    n_seeds_per_trial = (
+        HPO_N_SEEDS_PER_TRIAL if n_seeds_per_trial is None else n_seeds_per_trial
+    )
     objective_name = HPO_OBJECTIVE if objective_name is None else objective_name
     risk_lambda = HPO_RISK_LAMBDA if risk_lambda is None else risk_lambda
     config = load_config(config_path)
@@ -261,10 +278,14 @@ def objective(
     eval_environment = config.eval_environment
     if "risk_aversion" in params:
         environment = replace(environment, risk_aversion=params["risk_aversion"])
-        eval_environment = replace(eval_environment, risk_aversion=params["risk_aversion"])
+        eval_environment = replace(
+            eval_environment, risk_aversion=params["risk_aversion"]
+        )
     if "observation_mode" in params:
         environment = replace(environment, observation_mode=params["observation_mode"])
-        eval_environment = replace(eval_environment, observation_mode=params["observation_mode"])
+        eval_environment = replace(
+            eval_environment, observation_mode=params["observation_mode"]
+        )
 
     trial_sac = replace(
         config.sac,
@@ -277,7 +298,9 @@ def objective(
         buffer_size=min(config.sac.buffer_size, 100_000),
     )
     all_seed_scores: list[float] = []
-    eval_seeds = _eval_seed_block(n_eval_episodes, eval_seed_start, legacy_seed_behavior)
+    eval_seeds = _eval_seed_block(
+        n_eval_episodes, eval_seed_start, legacy_seed_behavior
+    )
     for training_seed in _trial_seeds(
         config.run.seed, trial.number, n_seeds_per_trial, legacy_seed_behavior
     ):
@@ -324,12 +347,16 @@ def objective(
                 episode_rewards.append(ep_reward)
                 if ep_index == min(9, len(eval_seeds) - 1):
                     trial.report(
-                        score_episode_rewards(episode_rewards, objective_name, risk_lambda),
+                        score_episode_rewards(
+                            episode_rewards, objective_name, risk_lambda
+                        ),
                         step=0,
                     )
                     if trial.should_prune():
                         raise optuna.TrialPruned()
-            all_seed_scores.append(score_episode_rewards(episode_rewards, objective_name, risk_lambda))
+            all_seed_scores.append(
+                score_episode_rewards(episode_rewards, objective_name, risk_lambda)
+            )
         finally:
             train_env.close()
             eval_env.close()

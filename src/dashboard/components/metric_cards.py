@@ -43,7 +43,9 @@ def render_metric_cards(
             if primary_ci:
                 primary_str += f"<br><span class='metric-ci'>95% CI {primary_ci}</span>"
             if baseline_ci:
-                baseline_str += f"<br><span class='metric-ci'>95% CI {baseline_ci}</span>"
+                baseline_str += (
+                    f"<br><span class='metric-ci'>95% CI {baseline_ci}</span>"
+                )
 
             if primary_val is not None and baseline_val is not None:
                 improvement = compute_improvement_over_baseline(

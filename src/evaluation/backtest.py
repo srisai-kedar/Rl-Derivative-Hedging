@@ -25,8 +25,24 @@ from src.training.observation import (
 )
 
 logger = logging.getLogger(__name__)
-EPISODE_COLUMNS = ["episode_id", "agent_type", "seed", "terminal_pnl", "total_cost", "n_steps"]
-STEP_COLUMNS = ["episode_id", "agent_type", "step", "price", "hedge_ratio", "bs_delta", "step_pnl", "step_cost"]
+EPISODE_COLUMNS = [
+    "episode_id",
+    "agent_type",
+    "seed",
+    "terminal_pnl",
+    "total_cost",
+    "n_steps",
+]
+STEP_COLUMNS = [
+    "episode_id",
+    "agent_type",
+    "step",
+    "price",
+    "hedge_ratio",
+    "bs_delta",
+    "step_pnl",
+    "step_cost",
+]
 
 
 @dataclass
@@ -66,8 +82,12 @@ class BacktestResults:
                 "episode_id": np.array([r.episode_id for r in results], dtype=np.int64),
                 "agent_type": np.array([r.agent_type for r in results], dtype=object),
                 "seed": np.array([r.seed for r in results], dtype=np.int64),
-                "terminal_pnl": np.array([r.terminal_pnl for r in results], dtype=np.float64),
-                "total_cost": np.array([r.total_cost for r in results], dtype=np.float64),
+                "terminal_pnl": np.array(
+                    [r.terminal_pnl for r in results], dtype=np.float64
+                ),
+                "total_cost": np.array(
+                    [r.total_cost for r in results], dtype=np.float64
+                ),
                 "n_steps": np.array([r.n_steps for r in results], dtype=np.int64),
             },
             columns=EPISODE_COLUMNS,
@@ -76,14 +96,29 @@ class BacktestResults:
         step_counts = [r.n_steps for r in results]
         step_df = pd.DataFrame(
             {
-                "episode_id": np.repeat(np.array([r.episode_id for r in results], dtype=np.int64), step_counts),
-                "agent_type": np.repeat(np.array([r.agent_type for r in results], dtype=object), step_counts),
-                "step": np.concatenate([np.arange(r.n_steps, dtype=np.int64) for r in results]),
+                "episode_id": np.repeat(
+                    np.array([r.episode_id for r in results], dtype=np.int64),
+                    step_counts,
+                ),
+                "agent_type": np.repeat(
+                    np.array([r.agent_type for r in results], dtype=object), step_counts
+                ),
+                "step": np.concatenate(
+                    [np.arange(r.n_steps, dtype=np.int64) for r in results]
+                ),
                 "price": np.concatenate([r.prices for r in results]).astype(np.float32),
-                "hedge_ratio": np.concatenate([r.hedge_ratios for r in results]).astype(np.float32),
-                "bs_delta": np.concatenate([r.bs_deltas for r in results]).astype(np.float32),
-                "step_pnl": np.concatenate([r.step_pnls for r in results]).astype(np.float32),
-                "step_cost": np.concatenate([r.step_costs for r in results]).astype(np.float32),
+                "hedge_ratio": np.concatenate([r.hedge_ratios for r in results]).astype(
+                    np.float32
+                ),
+                "bs_delta": np.concatenate([r.bs_deltas for r in results]).astype(
+                    np.float32
+                ),
+                "step_pnl": np.concatenate([r.step_pnls for r in results]).astype(
+                    np.float32
+                ),
+                "step_cost": np.concatenate([r.step_costs for r in results]).astype(
+                    np.float32
+                ),
             },
             columns=STEP_COLUMNS,
         )
@@ -92,8 +127,12 @@ class BacktestResults:
     def filter_agent(self, agent_type: str) -> BacktestResults:
         """Return results for one policy only."""
         return BacktestResults(
-            self.episode_df[self.episode_df["agent_type"] == agent_type].reset_index(drop=True),
-            self.step_df[self.step_df["agent_type"] == agent_type].reset_index(drop=True),
+            self.episode_df[self.episode_df["agent_type"] == agent_type].reset_index(
+                drop=True
+            ),
+            self.step_df[self.step_df["agent_type"] == agent_type].reset_index(
+                drop=True
+            ),
         )
 
 
@@ -136,7 +175,9 @@ class RLAgentPolicy:
         )
 
     def predict(self, obs: np.ndarray, info: dict) -> float:
-        action, _ = self.model.predict(self._normalise(obs)[np.newaxis, :], deterministic=self.deterministic)
+        action, _ = self.model.predict(
+            self._normalise(obs)[np.newaxis, :], deterministic=self.deterministic
+        )
         return float(np.clip(action[0, 0], 0.0, 1.0))
 
     def predict_batch(self, obs_batch: np.ndarray, infos: list[dict]) -> np.ndarray:
@@ -153,7 +194,9 @@ class RLAgentPolicy:
         obs_mean = self.vn.obs_rms.mean  # type: ignore[attr-defined]
         obs_var = self.vn.obs_rms.var  # type: ignore[attr-defined]
         normalised = (obs_batch - obs_mean) / np.sqrt(obs_var + epsilon)
-        return np.clip(normalised, -self.vn.clip_obs, self.vn.clip_obs).astype(np.float32)
+        return np.clip(normalised, -self.vn.clip_obs, self.vn.clip_obs).astype(
+            np.float32
+        )
 
 
 class BSDeltaPolicy:
@@ -186,7 +229,9 @@ def _initial_info(info: dict) -> dict:
     return info
 
 
-def _run_single_episode(policy: HedgingPolicy, env: HedgingEnv, episode_id: int, seed: int) -> EpisodeResult:
+def _run_single_episode(
+    policy: HedgingPolicy, env: HedgingEnv, episode_id: int, seed: int
+) -> EpisodeResult:
     """Run one raw-environment episode and collect its complete trajectory."""
     obs, reset_info = env.reset(seed=seed)
     info = _initial_info(reset_info)
@@ -201,7 +246,9 @@ def _run_single_episode(policy: HedgingPolicy, env: HedgingEnv, episode_id: int,
         bs_deltas.append(float(info["bs_delta"]))
         action = policy.predict(obs, info)
         hedge_ratios.append(action)
-        obs, _, terminated, truncated, info = env.step(np.array([action], dtype=np.float32))
+        obs, _, terminated, truncated, info = env.step(
+            np.array([action], dtype=np.float32)
+        )
         step_pnls.append(float(info["step_pnl"]))
         step_costs.append(float(info["transaction_cost"]))
     return EpisodeResult(
@@ -219,11 +266,16 @@ def _run_single_episode(policy: HedgingPolicy, env: HedgingEnv, episode_id: int,
     )
 
 
-def _predict_policy_batch(policy: HedgingPolicy, obs_batch: np.ndarray, infos: list[dict]) -> np.ndarray:
+def _predict_policy_batch(
+    policy: HedgingPolicy, obs_batch: np.ndarray, infos: list[dict]
+) -> np.ndarray:
     """Helper to dispatch batch prediction if implemented, else element-wise."""
     if hasattr(policy, "predict_batch"):
         return policy.predict_batch(obs_batch, infos)
-    return np.array([policy.predict(obs, info) for obs, info in zip(obs_batch, infos, strict=True)], dtype=np.float32)
+    return np.array(
+        [policy.predict(obs, info) for obs, info in zip(obs_batch, infos, strict=True)],
+        dtype=np.float32,
+    )
 
 
 def _run_batched_policy_episodes(
@@ -276,14 +328,20 @@ def _run_batched_policy_episodes(
                 hedge_ratios[:, t] = actions
 
                 for j in range(B):
-                    obs_j, _, _, _, inf_j = envs[j].step(np.array([actions[j]], dtype=np.float32))
+                    obs_j, _, _, _, inf_j = envs[j].step(
+                        np.array([actions[j]], dtype=np.float32)
+                    )
                     obs_batch[j] = obs_j
                     info_list[j] = inf_j
                     step_pnls[j, t] = inf_j["step_pnl"]
                     step_costs[j, t] = inf_j["transaction_cost"]
 
-            terminal_pnls = np.array([inf["terminal_pnl"] for inf in info_list], dtype=np.float64)
-            total_costs = np.array([inf["total_cost"] for inf in info_list], dtype=np.float64)
+            terminal_pnls = np.array(
+                [inf["terminal_pnl"] for inf in info_list], dtype=np.float64
+            )
+            total_costs = np.array(
+                [inf["total_cost"] for inf in info_list], dtype=np.float64
+            )
 
             chunk_ep_df = pd.DataFrame(
                 {
@@ -300,7 +358,9 @@ def _run_batched_policy_episodes(
             chunk_step_df = pd.DataFrame(
                 {
                     "episode_id": np.repeat(chunk_ep_ids, n_steps),
-                    "agent_type": np.repeat(np.array([policy.name] * B, dtype=object), n_steps),
+                    "agent_type": np.repeat(
+                        np.array([policy.name] * B, dtype=object), n_steps
+                    ),
                     "step": np.tile(np.arange(n_steps, dtype=np.int64), B),
                     "price": prices.ravel(),
                     "hedge_ratio": hedge_ratios.ravel(),
@@ -319,7 +379,9 @@ def _run_batched_policy_episodes(
                 env.close()
 
     pbar.close()
-    return pd.concat(episode_dfs, ignore_index=True), pd.concat(step_dfs, ignore_index=True)
+    return pd.concat(episode_dfs, ignore_index=True), pd.concat(
+        step_dfs, ignore_index=True
+    )
 
 
 def _run_backtest_legacy(
@@ -336,7 +398,9 @@ def _run_backtest_legacy(
     seeds = list(range(seed_offset, seed_offset + n_episodes))
     for policy in policies:
         env = HedgingEnv(**env_config.as_dict())
-        logger.info("Running %s episodes for policy: %s (legacy)", n_episodes, policy.name)
+        logger.info(
+            "Running %s episodes for policy: %s (legacy)", n_episodes, policy.name
+        )
         try:
             for episode_id, seed in tqdm(
                 enumerate(seeds),
@@ -394,7 +458,9 @@ def run_backtest(
     step_dfs: list[pd.DataFrame] = []
 
     for policy in policies:
-        logger.info("Running %s batched episodes for policy: %s", n_episodes, policy.name)
+        logger.info(
+            "Running %s batched episodes for policy: %s", n_episodes, policy.name
+        )
         policy_ep_df, policy_step_df = _run_batched_policy_episodes(
             policy=policy,
             env_config=env_config,
@@ -405,8 +471,16 @@ def run_backtest(
         ep_dfs.append(policy_ep_df)
         step_dfs.append(policy_step_df)
 
-    combined_ep_df = pd.concat(ep_dfs, ignore_index=True) if ep_dfs else pd.DataFrame(columns=EPISODE_COLUMNS)
-    combined_step_df = pd.concat(step_dfs, ignore_index=True) if step_dfs else pd.DataFrame(columns=STEP_COLUMNS)
+    combined_ep_df = (
+        pd.concat(ep_dfs, ignore_index=True)
+        if ep_dfs
+        else pd.DataFrame(columns=EPISODE_COLUMNS)
+    )
+    combined_step_df = (
+        pd.concat(step_dfs, ignore_index=True)
+        if step_dfs
+        else pd.DataFrame(columns=STEP_COLUMNS)
+    )
     return BacktestResults(episode_df=combined_ep_df, step_df=combined_step_df)
 
 
@@ -427,7 +501,12 @@ def run_robustness_sweep(
     combinations = [(sigma, kappa) for sigma in sigma_values for kappa in kappa_values]
     for sigma, kappa in tqdm(combinations, desc="Robustness sweep"):
         sweep_config = EnvironmentConfig(
-            **{**base_config.as_dict(), "sigma": sigma, "kappa": kappa, "randomise_params": False}
+            **{
+                **base_config.as_dict(),
+                "sigma": sigma,
+                "kappa": kappa,
+                "randomise_params": False,
+            }
         )
         results = run_backtest(
             policies,
@@ -450,7 +529,9 @@ def run_robustness_sweep(
     return pd.DataFrame(rows)
 
 
-def save_results(results: BacktestResults, metrics: dict[str, dict[str, float]], output_dir: str) -> None:
+def save_results(
+    results: BacktestResults, metrics: dict[str, dict[str, float]], output_dir: str
+) -> None:
     """Persist episode data, step data, and metrics for later dashboard use."""
     os.makedirs(output_dir, exist_ok=True)
     results.episode_df.to_csv(os.path.join(output_dir, "episode_data.csv"), index=False)

@@ -12,10 +12,26 @@ from src.envs.reward import compute_step_reward, compute_terminal_reward
     ("mode", "expected_keys"),
     [
         ("full", HedgingEnv.OBS_KEYS),
-        ("no_greeks", ["price_ratio", "time_remaining", "r", "strike_ratio", "hedge_pos"]),
+        (
+            "no_greeks",
+            ["price_ratio", "time_remaining", "r", "strike_ratio", "hedge_pos"],
+        ),
         ("price_only", ["price_ratio", "time_remaining", "hedge_pos"]),
-        ("no_bs_delta", ["price_ratio", "time_remaining", "sigma", "r", "strike_ratio", "hedge_pos"]),
-        ("no_bs_delta_no_sigma", ["price_ratio", "time_remaining", "r", "strike_ratio", "hedge_pos"]),
+        (
+            "no_bs_delta",
+            [
+                "price_ratio",
+                "time_remaining",
+                "sigma",
+                "r",
+                "strike_ratio",
+                "hedge_pos",
+            ],
+        ),
+        (
+            "no_bs_delta_no_sigma",
+            ["price_ratio", "time_remaining", "r", "strike_ratio", "hedge_pos"],
+        ),
     ],
 )
 def test_observation_modes_derive_keys_and_dimensions(mode, expected_keys):
@@ -88,7 +104,9 @@ def test_time_remaining_decreases_monotonically(env):
     for i in range(env.T):
         obs, _, terminated, _, _ = env.step(np.array([0.5], dtype=np.float32))
         time_remaining = float(obs[1])
-        assert time_remaining < prev_time, f"Time remaining did not decrease at step {i}"
+        assert time_remaining < prev_time, (
+            f"Time remaining did not decrease at step {i}"
+        )
         prev_time = time_remaining
         if terminated:
             break
@@ -118,6 +136,7 @@ def test_bs_delta_baseline_beats_random(env):
     A Black-Scholes delta hedge should produce lower P&L std than random actions.
     Run 200 episodes each. Test that std(pnl_bs) < std(pnl_random).
     """
+
     def run_episodes(policy_fn, n=200):
         pnls = []
         for seed in range(n):
@@ -193,6 +212,7 @@ def test_out_of_bounds_action_handled(env):
 
 def test_same_seed_produces_same_episode(env):
     """Same seed must produce identical price paths and rewards."""
+
     def run_one(seed):
         env.reset(seed=seed)
         rewards = []
@@ -215,6 +235,7 @@ def test_same_seed_produces_same_episode(env):
 
 def test_different_seeds_produce_different_episodes(env):
     """Different seeds must produce different price paths."""
+
     def first_step_reward(seed):
         env.reset(seed=seed)
         _, reward, _, _, _ = env.step(np.array([0.5], dtype=np.float32))

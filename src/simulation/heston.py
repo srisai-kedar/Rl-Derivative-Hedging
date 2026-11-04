@@ -107,15 +107,15 @@ class HestonSimulator:
         # Cholesky factor for the 2-D correlated Brownians:
         # [ Z_S ]   [ 1    0            ] [ W_1 ]
         # [ Z_v ] = [ rho  sqrt(1-rho^2) ] [ W_2 ]
-        self._chol = np.array(
-            [[1.0, 0.0], [rho, np.sqrt(max(1.0 - rho**2, 0.0))]]
-        )
+        self._chol = np.array([[1.0, 0.0], [rho, np.sqrt(max(1.0 - rho**2, 0.0))]])
 
     # ------------------------------------------------------------------ #
     # Core simulation
     # ------------------------------------------------------------------ #
 
-    def _correlated_normals(self, shape: tuple[int, ...]) -> tuple[np.ndarray, np.ndarray]:
+    def _correlated_normals(
+        self, shape: tuple[int, ...]
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Return (Z_S, Z_v) correlated standard normals with shape `shape`."""
         W = self.rng.standard_normal((*shape, 2))  # shape + (2,)
         Z = W @ self._chol.T  # apply Cholesky: Z = W * L^T
@@ -140,12 +140,17 @@ class HestonSimulator:
             v_plus = max(v, 0.0)
             sv = np.sqrt(v_plus * self.dt)
             # Variance step (full-truncation Euler)
-            v = v_plus + self.kappa * (self.theta - v_plus) * self.dt + self.xi * sv * Z_v_arr[i]
+            v = (
+                v_plus
+                + self.kappa * (self.theta - v_plus) * self.dt
+                + self.xi * sv * Z_v_arr[i]
+            )
             v = max(v, 0.0)
             variance_path[i + 1] = v
             # Spot step (log-Euler for exact lognormal conditional on v_plus)
             prices[i + 1] = prices[i] * np.exp(
-                (self.mu - 0.5 * v_plus) * self.dt + np.sqrt(v_plus) * sqrt_dt * Z_S_arr[i]
+                (self.mu - 0.5 * v_plus) * self.dt
+                + np.sqrt(v_plus) * sqrt_dt * Z_S_arr[i]
             )
 
         self.last_variance_path = variance_path
@@ -163,10 +168,15 @@ class HestonSimulator:
         for i in range(n_steps):
             v_plus = np.maximum(v, 0.0)
             sv = np.sqrt(v_plus * self.dt)
-            v = v_plus + self.kappa * (self.theta - v_plus) * self.dt + self.xi * sv * Z_v[:, i]
+            v = (
+                v_plus
+                + self.kappa * (self.theta - v_plus) * self.dt
+                + self.xi * sv * Z_v[:, i]
+            )
             v = np.maximum(v, 0.0)
             out[:, i + 1] = out[:, i] * np.exp(
-                (self.mu - 0.5 * v_plus) * self.dt + np.sqrt(v_plus) * sqrt_dt * Z_S[:, i]
+                (self.mu - 0.5 * v_plus) * self.dt
+                + np.sqrt(v_plus) * sqrt_dt * Z_S[:, i]
             )
 
         return out

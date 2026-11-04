@@ -40,7 +40,10 @@ def test_hedging_error_constant_series():
 
 
 def test_hedging_error_positive():
-    assert compute_hedging_error(pd.Series(np.random.default_rng(42).normal(size=100))) >= 0.0
+    assert (
+        compute_hedging_error(pd.Series(np.random.default_rng(42).normal(size=100)))
+        >= 0.0
+    )
 
 
 def test_sharpe_zero_std_returns_zero():
@@ -52,7 +55,9 @@ def test_sharpe_positive_for_positive_mean():
 
 
 def test_cost_efficiency_zero_cost_returns_inf():
-    assert np.isinf(compute_cost_efficiency(pd.Series([1.0, 2.0]), pd.Series([0.0, 0.0])))
+    assert np.isinf(
+        compute_cost_efficiency(pd.Series([1.0, 2.0]), pd.Series([0.0, 0.0]))
+    )
 
 
 def test_improvement_rl_better_lower_is_better():
@@ -68,7 +73,16 @@ def test_improvement_zero_baseline_returns_zero():
 
 
 def test_compute_all_metrics_keys(results_fixture):
-    required = {"mean_pnl", "std_pnl", "cvar_95", "sharpe", "pct_positive", "mean_cost", "cost_efficiency", "n_episodes"}
+    required = {
+        "mean_pnl",
+        "std_pnl",
+        "cvar_95",
+        "sharpe",
+        "pct_positive",
+        "mean_cost",
+        "cost_efficiency",
+        "n_episodes",
+    }
     for agent_type in results_fixture.episode_df["agent_type"].unique():
         assert required <= compute_all_metrics(results_fixture, agent_type).keys()
 

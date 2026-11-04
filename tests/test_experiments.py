@@ -24,7 +24,10 @@ multiseed = _load_module("scripts/multiseed.py", "multiseed_script")
 def test_multiseed_config_updates_are_nested_without_mutating_base():
     base = {"run": {"seed": 1, "name": "base"}, "paths": {"results_dir": "results"}}
     updated = multiseed._deep_update(base, {"run": {"seed": 2}})
-    assert updated == {"run": {"seed": 2, "name": "base"}, "paths": {"results_dir": "results"}}
+    assert updated == {
+        "run": {"seed": 2, "name": "base"},
+        "paths": {"results_dir": "results"},
+    }
     assert base["run"]["seed"] == 1
 
 
@@ -83,7 +86,11 @@ def test_multiseed_passes_per_run_config_and_exact_checkpoint(monkeypatch, tmp_p
             info.parent.mkdir(parents=True, exist_ok=True)
             info.write_text(
                 json.dumps(
-                    {"status": "completed", "checkpoint_path": str(exact), "vecnorm_path": str(vecnorm)}
+                    {
+                        "status": "completed",
+                        "checkpoint_path": str(exact),
+                        "vecnorm_path": str(vecnorm),
+                    }
                 ),
                 encoding="utf-8",
             )
@@ -91,7 +98,8 @@ def test_multiseed_passes_per_run_config_and_exact_checkpoint(monkeypatch, tmp_p
             output = Path(command[command.index("--output-dir") + 1])
             output.mkdir(parents=True, exist_ok=True)
             (output / "metrics.json").write_text(
-                json.dumps({"rl_agent": {"mean_pnl": 1, "std_pnl": 1}}), encoding="utf-8"
+                json.dumps({"rl_agent": {"mean_pnl": 1, "std_pnl": 1}}),
+                encoding="utf-8",
             )
             (output / "run_manifest.json").write_text("{}", encoding="utf-8")
 
@@ -101,4 +109,6 @@ def test_multiseed_passes_per_run_config_and_exact_checkpoint(monkeypatch, tmp_p
     train_config = commands[0][commands[0].index("--config") + 1]
     evaluate_config = commands[1][commands[1].index("--config") + 1]
     assert train_config == evaluate_config
-    assert commands[1][commands[1].index("--checkpoint") + 1].endswith("exact\\model.zip")
+    assert commands[1][commands[1].index("--checkpoint") + 1].endswith(
+        "exact\\model.zip"
+    )

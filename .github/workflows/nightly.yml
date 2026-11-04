@@ -1,0 +1,30 @@
+name: Nightly and manual deep verification
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  slow:
+    name: HPO and slow integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install locked runtime and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-py312.lock.txt -r requirements-dev.txt
+          pip install -e .
+      - name: HPO and slow tests
+        run: pytest tests/ -m slow --cov=src --cov-fail-under=85
+      - name: Tiny train-evaluate-manifest smoke
+        run: pytest tests/test_integration_smoke.py -m slow -q

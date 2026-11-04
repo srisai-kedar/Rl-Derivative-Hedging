@@ -442,9 +442,9 @@ class HedgingEnv(gym.Env):
             # rho=-0.7. Derive xi when omitted to satisfy Feller while
             # retaining xi=0.3 at the legacy sigma=0.20 default.
             kwargs = {
-                "v0": self.sigma ** 2,
+                "v0": self.sigma**2,
                 "kappa": 2.0,
-                "theta": self.sigma ** 2,
+                "theta": self.sigma**2,
                 "rho": -0.7,
             }
             kwargs.update(self.market_model_kwargs)

@@ -64,9 +64,7 @@ def test_different_seeds_differ():
 def test_vectorised_vs_loop():
     n_paths = 50
     n_steps = 30
-    sim_vectorised = GBMSimulator(
-        S0=100.0, mu=0.05, sigma=0.20, dt=1 / 252, seed=0
-    )
+    sim_vectorised = GBMSimulator(S0=100.0, mu=0.05, sigma=0.20, dt=1 / 252, seed=0)
     batch_paths = sim_vectorised.generate_paths(n_paths, n_steps)
 
     sim_loop = GBMSimulator(S0=100.0, mu=0.05, sigma=0.20, dt=1 / 252, seed=0)

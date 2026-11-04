@@ -40,7 +40,9 @@ def compute_file_sha256(path: str | Path) -> str:
     """Compute SHA-256 hash of a file in 64 KiB chunks."""
     p = Path(path)
     if not p.is_file():
-        raise FileNotFoundError(f"Cannot compute hash: {p} does not exist or is not a file")
+        raise FileNotFoundError(
+            f"Cannot compute hash: {p} does not exist or is not a file"
+        )
     h = hashlib.sha256()
     with open(p, "rb") as f:
         while chunk := f.read(65536):
@@ -156,8 +158,7 @@ def _to_json_safe(obj: Any, path: str = "$config") -> Any:
     if isinstance(obj, (str, int, float, bool, type(None))):
         return obj
     raise TypeError(
-        f"Unserialisable config value at {path}: {obj!r} "
-        f"({type(obj).__name__})."
+        f"Unserialisable config value at {path}: {obj!r} ({type(obj).__name__})."
     )
 
 
@@ -310,7 +311,9 @@ def verify_checkpoint_integrity(
 
     hashes = manifest.get("checkpoint_hashes")
     if not isinstance(hashes, dict):
-        message = f"run_manifest.json at {manifest_file} does not contain checkpoint_hashes."
+        message = (
+            f"run_manifest.json at {manifest_file} does not contain checkpoint_hashes."
+        )
         if require_manifest or not allow_unverified:
             raise ManifestRequiredError(message)
         logger.warning("%s Continuing because allow_unverified=True.", message)
@@ -353,7 +356,11 @@ def validate_manifest_environment(
     if checkpoint_path is not None:
         candidate_dirs.insert(0, Path(checkpoint_path).parent)
     manifest_file = next(
-        (directory / "run_manifest.json" for directory in candidate_dirs if (directory / "run_manifest.json").is_file()),
+        (
+            directory / "run_manifest.json"
+            for directory in candidate_dirs
+            if (directory / "run_manifest.json").is_file()
+        ),
         None,
     )
     if manifest_file is None:
@@ -362,7 +369,9 @@ def validate_manifest_environment(
     with open(manifest_file, encoding="utf-8") as f:
         manifest = json.load(f)
     config_data = manifest.get("config", {}).get("data", {})
-    stored_environment = config_data.get("eval_environment") or config_data.get("environment")
+    stored_environment = config_data.get("eval_environment") or config_data.get(
+        "environment"
+    )
     if not isinstance(stored_environment, dict):
         stored_environment = config_data
     expected = env_config.as_dict()
@@ -375,9 +384,8 @@ def validate_manifest_environment(
     if not mismatches:
         return
 
-    message = (
-        f"Manifest environment mismatch at {manifest_file}: "
-        + "; ".join(mismatches)
+    message = f"Manifest environment mismatch at {manifest_file}: " + "; ".join(
+        mismatches
     )
     if allow_mismatch:
         logger.warning("%s Continuing because allow_mismatch=True.", message)

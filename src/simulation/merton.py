@@ -102,7 +102,9 @@ class MertonJumpDiffusionSimulator:
 
     def _step_log_returns(self, n: int) -> np.ndarray:
         """Generate n log-returns for one time step."""
-        diffusion = self._adj_drift + self.sigma * np.sqrt(self.dt) * self.rng.standard_normal(n)
+        diffusion = self._adj_drift + self.sigma * np.sqrt(
+            self.dt
+        ) * self.rng.standard_normal(n)
         # Jump component
         n_jumps = self.rng.poisson(self.lam * self.dt, size=n)
         self.last_jump_counts = n_jumps
@@ -142,5 +144,7 @@ class MertonJumpDiffusionSimulator:
     def expected_jumps_per_episode(self, n_steps: int) -> float:
         """Return the expected jump count over ``n_steps * dt`` years."""
         if not isinstance(n_steps, (int, np.integer)) or n_steps < 0:
-            raise ValueError(f"n_steps must be a non-negative integer, got {n_steps!r}.")
+            raise ValueError(
+                f"n_steps must be a non-negative integer, got {n_steps!r}."
+            )
         return self.lam * self.dt * int(n_steps)

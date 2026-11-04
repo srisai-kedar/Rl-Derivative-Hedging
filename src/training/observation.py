@@ -10,7 +10,9 @@ import numpy as np
 def _space_dimension(space: Any, label: str) -> int:
     shape = getattr(space, "shape", None)
     if shape is None or len(shape) != 1:
-        raise ValueError(f"{label} observation space must be one-dimensional, got {shape!r}")
+        raise ValueError(
+            f"{label} observation space must be one-dimensional, got {shape!r}"
+        )
     return int(shape[0])
 
 

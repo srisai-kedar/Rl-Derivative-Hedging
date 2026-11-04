@@ -28,7 +28,7 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*"]
+include = ["src*", "experiments*"]
 
 [tool.ruff]
 target-version = "py311"

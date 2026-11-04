@@ -252,9 +252,7 @@ def test_model_actions_in_valid_range(trained_run):
     for _ in range(30):
         action, _ = model.predict(obs, deterministic=False)
         action_value = float(np.asarray(action).reshape(-1)[0])
-        assert 0.0 <= action_value <= 1.0, (
-            f"Action {action_value} is outside [0, 1]"
-        )
+        assert 0.0 <= action_value <= 1.0, f"Action {action_value} is outside [0, 1]"
         obs, _, done, _ = inf_env.step(action)
         if bool(done[0]):
             break
@@ -316,7 +314,9 @@ def test_rl_agent_policy_rejects_observation_dimension_mismatch():
         obs_rms=SimpleNamespace(mean=np.zeros(5)),
         venv=SimpleNamespace(get_attr=lambda _: ["no_bs_delta_no_sigma"]),
     )
-    with pytest.raises(ValueError, match="observation_mode='no_bs_delta_no_sigma'.*model=7"):
+    with pytest.raises(
+        ValueError, match="observation_mode='no_bs_delta_no_sigma'.*model=7"
+    ):
         RLAgentPolicy(model, vec_normalize)
 
 
@@ -375,6 +375,7 @@ def test_interrupted_training_refreshes_manifest(tmp_path, monkeypatch):
             Path(f"{path}.zip").write_bytes(b"model")
 
     monkeypatch.setattr(training, "load_config", lambda _: config)
+
     def fake_setup_output_dirs(_):
         checkpoint_dir.mkdir()
         results_dir.mkdir()

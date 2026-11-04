@@ -86,7 +86,9 @@ class CallbackConfig:
     n_eval_episodes: int = 100
     save_freq: int = 100_000
     verbose: int = 1
-    eval_seed_base: int | None = None  # set (e.g. 10_000) for common-random-number evals
+    eval_seed_base: int | None = (
+        None  # set (e.g. 10_000) for common-random-number evals
+    )
 
 
 @dataclass

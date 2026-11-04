@@ -40,12 +40,29 @@ def _commands(
     n_episodes: int,
     skip_robustness: bool,
 ) -> tuple[list[str], list[str]]:
-    train = [sys.executable, "-m", "src.training.train", "--config", str(config_path), "--run-info", str(run_info_path)]
+    train = [
+        sys.executable,
+        "-m",
+        "src.training.train",
+        "--config",
+        str(config_path),
+        "--run-info",
+        str(run_info_path),
+    ]
     evaluate = [
-        sys.executable, "-m", "src.evaluation.evaluate",
-        "--checkpoint", str(checkpoint_path), "--vecnorm", str(vecnorm_path),
-        "--config", str(evaluation_config), "--n-episodes", str(n_episodes),
-        "--output-dir", str(evaluation_dir),
+        sys.executable,
+        "-m",
+        "src.evaluation.evaluate",
+        "--checkpoint",
+        str(checkpoint_path),
+        "--vecnorm",
+        str(vecnorm_path),
+        "--config",
+        str(evaluation_config),
+        "--n-episodes",
+        str(n_episodes),
+        "--output-dir",
+        str(evaluation_dir),
     ]
     if skip_robustness:
         evaluate.append("--skip-robustness")
@@ -98,17 +115,28 @@ def run_multiseed(
         checkpoint_path = run_dir / "checkpoints" / "final_model.zip"
         vecnorm_path = run_dir / "checkpoints" / "final_vecnorm.pkl"
         train_cmd, evaluate_cmd = _commands(
-            config_file, run_info, checkpoint_path, vecnorm_path, config_file, evaluation_dir, n_episodes, skip_robustness
+            config_file,
+            run_info,
+            checkpoint_path,
+            vecnorm_path,
+            config_file,
+            evaluation_dir,
+            n_episodes,
+            skip_robustness,
         )
         if dry_run:
             print(f"DRY-RUN seed {seed}: would write {config_file}")
             print("  " + " ".join(train_cmd))
             print("  " + " ".join(evaluate_cmd))
-            print("  MEASURED: nothing; no training, evaluation, or aggregation performed")
+            print(
+                "  MEASURED: nothing; no training, evaluation, or aggregation performed"
+            )
             continue
 
         run_dir.mkdir(parents=True, exist_ok=True)
-        config_file.write_text(yaml.safe_dump(run_config, sort_keys=False), encoding="utf-8")
+        config_file.write_text(
+            yaml.safe_dump(run_config, sort_keys=False), encoding="utf-8"
+        )
         subprocess.run(train_cmd, check=True)
         info = json.loads(run_info.read_text(encoding="utf-8"))
         if info.get("status") != "completed":
@@ -145,7 +173,16 @@ def main() -> int:
     args = ap.parse_args()
     if len(args.seeds) < 2:
         ap.error("need >= 2 seeds for across-seed statistics")
-    return run_multiseed(args.config, args.seeds, args.n_episodes, args.results_root, resume=args.resume, dry_run=args.dry_run, name=args.name, skip_robustness=args.skip_robustness)
+    return run_multiseed(
+        args.config,
+        args.seeds,
+        args.n_episodes,
+        args.results_root,
+        resume=args.resume,
+        dry_run=args.dry_run,
+        name=args.name,
+        skip_robustness=args.skip_robustness,
+    )
 
 
 if __name__ == "__main__":
