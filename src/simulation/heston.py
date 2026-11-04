@@ -28,8 +28,11 @@ marking convention lets the telescoping P&L identity remain valid under the
 environment's own marks.
 
 Feller condition:  2 * kappa * theta >= xi^2  guarantees v > 0 a.s. in
-continuous time.  When violated, full-truncation keeps the simulation
-well-defined at the cost of a mild discretisation bias.
+continuous time.  The HedgingEnv derives an omitted default ``xi`` as
+``min(0.3, sqrt(2*kappa*theta))``; an explicitly supplied ``xi`` is honoured
+even when it violates Feller, while full-truncation keeps the simulation
+well-defined.  The environment's top-level ``kappa`` is transaction cost;
+this simulator's ``kappa`` is variance mean reversion.
 """
 
 from __future__ import annotations
@@ -99,6 +102,7 @@ class HestonSimulator:
         self.rho = float(rho)
         self.dt = float(dt)
         self.rng = np.random.default_rng(seed)
+        self.last_variance_path: np.ndarray | None = None
 
         # Cholesky factor for the 2-D correlated Brownians:
         # [ Z_S ]   [ 1    0            ] [ W_1 ]
@@ -126,6 +130,8 @@ class HestonSimulator:
         prices = np.empty(n_steps + 1)
         prices[0] = self.S0
         v = self.v0
+        variance_path = np.empty(n_steps + 1)
+        variance_path[0] = v
 
         Z_S_arr, Z_v_arr = self._correlated_normals((n_steps,))
         sqrt_dt = np.sqrt(self.dt)
@@ -135,11 +141,14 @@ class HestonSimulator:
             sv = np.sqrt(v_plus * self.dt)
             # Variance step (full-truncation Euler)
             v = v_plus + self.kappa * (self.theta - v_plus) * self.dt + self.xi * sv * Z_v_arr[i]
+            v = max(v, 0.0)
+            variance_path[i + 1] = v
             # Spot step (log-Euler for exact lognormal conditional on v_plus)
             prices[i + 1] = prices[i] * np.exp(
                 (self.mu - 0.5 * v_plus) * self.dt + np.sqrt(v_plus) * sqrt_dt * Z_S_arr[i]
             )
 
+        self.last_variance_path = variance_path
         return prices
 
     def generate_paths(self, n_paths: int, n_steps: int) -> np.ndarray:
@@ -155,6 +164,7 @@ class HestonSimulator:
             v_plus = np.maximum(v, 0.0)
             sv = np.sqrt(v_plus * self.dt)
             v = v_plus + self.kappa * (self.theta - v_plus) * self.dt + self.xi * sv * Z_v[:, i]
+            v = np.maximum(v, 0.0)
             out[:, i + 1] = out[:, i] * np.exp(
                 (self.mu - 0.5 * v_plus) * self.dt + np.sqrt(v_plus) * sqrt_dt * Z_S[:, i]
             )

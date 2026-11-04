@@ -112,7 +112,7 @@ rl-derivative-hedging/
 |-- configs/              YAML training configuration
 |-- src/
 |   |-- finance/          Black-Scholes pricing, Greeks, transaction costs
-|   |-- simulation/       GBM price-path generator
+|   |-- simulation/       GBM, Heston, and Merton price-path generators
 |   |-- envs/             Gymnasium hedging environment
 |   |-- training/         SAC training, env factory, callbacks, HPO
 |   |-- evaluation/       Backtest, metrics, robustness, Plotly charts
@@ -135,13 +135,22 @@ alongside the SAC checkpoint.
 **Shared seeds for baseline comparison:** RL, Black-Scholes delta, and zero hedge
 are evaluated on identical price paths for each episode seed.
 
+**Market-model convention:** `market_model="gbm"` remains the default and
+preserves the existing GBM behaviour. `heston` uses full-truncation Euler and
+`merton` uses an exact-conditional jump-diffusion step. In every model, option
+marks and `bs_delta` use Black-Scholes with the environment's configured
+`sigma`; the hedger does not observe Heston's instantaneous variance or Merton
+jump state. The environment's top-level `kappa` is the transaction-cost rate.
+Heston's variance mean-reversion speed is configured separately, using the
+backward-compatible `market_model_kwargs["kappa"]` key. When Heston `xi` is
+omitted, the environment derives `min(0.3, sqrt(2*kappa*theta))` to satisfy
+the Feller condition; explicit `xi` values are honoured with full truncation.
+
 **Streamlit over React:** The dashboard is a local analysis tool. Streamlit and
 Plotly keep the project Python-native while still supporting interactive charts.
 
 ## Known Limitations
 
-- Price paths are simulated with GBM only; jumps, stochastic volatility, and fat
-  tails are not modelled.
 - The option tested is a European call on a single underlying.
 - No real market data is used.
 - The current SAC checkpoint is undertrained relative to the analytical baseline

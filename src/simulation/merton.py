@@ -90,6 +90,7 @@ class MertonJumpDiffusionSimulator:
         self.sigma_J = float(sigma_J)
         self.dt = float(dt)
         self.rng = np.random.default_rng(seed)
+        self.last_jump_counts = np.empty(0, dtype=np.int64)
 
         # Pre-compute drift adjustment so E[S_t] = S_0 * exp(mu*t)
         self._k_bar = np.exp(mu_J + 0.5 * sigma_J**2) - 1.0
@@ -104,6 +105,7 @@ class MertonJumpDiffusionSimulator:
         diffusion = self._adj_drift + self.sigma * np.sqrt(self.dt) * self.rng.standard_normal(n)
         # Jump component
         n_jumps = self.rng.poisson(self.lam * self.dt, size=n)
+        self.last_jump_counts = n_jumps
         jump_contrib = np.zeros(n)
         for idx in np.where(n_jumps > 0)[0]:
             k = int(n_jumps[idx])
@@ -123,18 +125,22 @@ class MertonJumpDiffusionSimulator:
         """Generate multiple price paths of shape (n_paths, n_steps + 1)."""
         out = np.empty((n_paths, n_steps + 1))
         out[:, 0] = self.S0
+        jump_counts = np.empty((n_paths, n_steps), dtype=np.int64)
 
         for step in range(n_steps):
             log_rets = self._step_log_returns(n_paths)
+            jump_counts[:, step] = self.last_jump_counts
             out[:, step + 1] = out[:, step] * np.exp(log_rets)
 
+        self.last_jump_counts = jump_counts
         return out
 
     def reset_rng(self, seed: int | None = None) -> None:
         """Reset the RNG for reproducible evaluation."""
         self.rng = np.random.default_rng(seed)
 
-    @property
-    def expected_jumps_per_episode(self) -> float:
-        """Expected number of jumps over one full episode of dt*n_steps years."""
-        return self.lam * self.dt
+    def expected_jumps_per_episode(self, n_steps: int) -> float:
+        """Return the expected jump count over ``n_steps * dt`` years."""
+        if not isinstance(n_steps, (int, np.integer)) or n_steps < 0:
+            raise ValueError(f"n_steps must be a non-negative integer, got {n_steps!r}.")
+        return self.lam * self.dt * int(n_steps)

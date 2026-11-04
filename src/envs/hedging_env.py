@@ -80,6 +80,13 @@ class HedgingEnv(gym.Env):
     Action: Box(1,) in [0, 1]; non-finite actions raise ``ValueError``.
     Episode: exactly ``T`` steps, then ``terminated=True``.
 
+    Pricing/information convention: option values and ``bs_delta`` are always
+    Black-Scholes marks using the environment's configured (or randomised)
+    ``sigma``. Heston variance and Merton jumps are not inserted into those
+    marks. The top-level ``kappa`` remains the transaction-cost coefficient;
+    Heston's variance mean-reversion speed uses the backward-compatible
+    ``market_model_kwargs["kappa"]`` key.
+
     Parameters
     ----------
     risk_aversion:
@@ -149,7 +156,9 @@ class HedgingEnv(gym.Env):
         self.liquidate_at_expiry = liquidate_at_expiry
         self.include_financing = include_financing
         self.market_model = market_model
-        self.market_model_kwargs: dict[str, Any] = market_model_kwargs or {}
+        self.market_model_kwargs = self._validate_market_model_kwargs(
+            market_model, market_model_kwargs
+        )
 
         if observation_mode not in self._OBS_MODES:
             raise ConfigurationError(
@@ -181,6 +190,62 @@ class HedgingEnv(gym.Env):
     # ------------------------------------------------------------------ #
     # Validation
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _validate_market_model_kwargs(
+        market_model: str, market_model_kwargs: dict[str, Any] | None
+    ) -> dict[str, float]:
+        """Validate model-specific kwargs before any episode reset."""
+        if market_model_kwargs is None:
+            return {}
+        if not isinstance(market_model_kwargs, dict):
+            raise ConfigurationError("market_model_kwargs must be a dictionary.")
+
+        allowed = {
+            "gbm": set(),
+            "heston": {"v0", "kappa", "theta", "xi", "rho"},
+            "merton": {"lam", "mu_J", "sigma_J"},
+        }[market_model]
+        unknown = set(market_model_kwargs) - allowed
+        if unknown:
+            raise ConfigurationError(
+                f"Unknown market_model_kwargs for {market_model!r}: "
+                f"{sorted(unknown, key=str)}; allowed keys are {sorted(allowed)}."
+            )
+
+        values: dict[str, float] = {}
+        for key, value in market_model_kwargs.items():
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ConfigurationError(
+                    f"market_model_kwargs[{key!r}] must be numeric, got {value!r}."
+                ) from exc
+            if not math.isfinite(numeric_value):
+                raise ConfigurationError(
+                    f"market_model_kwargs[{key!r}] must be finite, got {value!r}."
+                )
+            values[key] = numeric_value
+
+        if market_model == "heston":
+            if "v0" in values and values["v0"] <= 0:
+                raise ConfigurationError("Heston v0 must be > 0.")
+            if "kappa" in values and values["kappa"] <= 0:
+                raise ConfigurationError(
+                    "Heston market_model_kwargs['kappa'] must be > 0."
+                )
+            if "theta" in values and values["theta"] <= 0:
+                raise ConfigurationError("Heston theta must be > 0.")
+            if "xi" in values and values["xi"] <= 0:
+                raise ConfigurationError("Heston xi must be > 0.")
+            if "rho" in values and not -1.0 <= values["rho"] <= 1.0:
+                raise ConfigurationError("Heston rho must be in [-1, 1].")
+        elif market_model == "merton":
+            if "lam" in values and values["lam"] < 0:
+                raise ConfigurationError("Merton lam must be >= 0.")
+            if "sigma_J" in values and values["sigma_J"] < 0:
+                raise ConfigurationError("Merton sigma_J must be >= 0.")
+        return values
+
     @classmethod
     def _validate_config(
         cls,
@@ -373,15 +438,20 @@ class HedgingEnv(gym.Env):
                 S0=self.S0, mu=self.r, sigma=self.sigma, dt=self.dt, seed=seed
             )
         elif self.market_model == "heston":
-            # Defaults: v0=sigma^2, kappa=2, theta=sigma^2, xi=0.3, rho=-0.7
+            # Defaults: v0=sigma^2, Heston kappa=2, theta=sigma^2,
+            # rho=-0.7. Derive xi when omitted to satisfy Feller while
+            # retaining xi=0.3 at the legacy sigma=0.20 default.
             kwargs = {
                 "v0": self.sigma ** 2,
                 "kappa": 2.0,
                 "theta": self.sigma ** 2,
-                "xi": 0.3,
                 "rho": -0.7,
             }
             kwargs.update(self.market_model_kwargs)
+            if "xi" not in self.market_model_kwargs:
+                kwargs["xi"] = min(
+                    0.3, np.sqrt(2.0 * kwargs["kappa"] * kwargs["theta"])
+                )
             sim = HestonSimulator(  # type: ignore[assignment]
                 S0=self.S0,
                 mu=self.r,
