@@ -161,23 +161,15 @@ class ZeroHedgePolicy:
         return np.zeros(len(obs_batch), dtype=np.float32)
 
 
-def _initial_info(env: HedgingEnv, obs: np.ndarray, info: dict) -> dict:
-    """Supply step-zero policy information without changing the Phase 2 environment."""
-    if "bs_delta" in info:
-        return info
-    assert env.state is not None
-    return {
-        "S": float(env.state.S),
-        "bs_delta": float(obs[6]),
-        "hedge_pos": float(env.state.hedge_pos),
-        "option_value": float(env.state.option_value),
-    }
+def _initial_info(info: dict) -> dict:
+    """Use the state information supplied by ``HedgingEnv.reset()``."""
+    return info
 
 
 def _run_single_episode(policy: HedgingPolicy, env: HedgingEnv, episode_id: int, seed: int) -> EpisodeResult:
     """Run one raw-environment episode and collect its complete trajectory."""
     obs, reset_info = env.reset(seed=seed)
-    info = _initial_info(env, obs, reset_info)
+    info = _initial_info(reset_info)
     step_pnls: list[float] = []
     step_costs: list[float] = []
     hedge_ratios: list[float] = []
@@ -243,7 +235,7 @@ def _run_batched_policy_episodes(
             info_list = []
             for j in range(B):
                 obs_j, reset_info_j = envs[j].reset(seed=chunk_seeds[j])
-                info_j = _initial_info(envs[j], obs_j, reset_info_j)
+                info_j = _initial_info(reset_info_j)
                 obs_list.append(obs_j)
                 info_list.append(info_j)
 

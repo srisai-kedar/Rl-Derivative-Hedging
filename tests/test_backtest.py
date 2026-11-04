@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -205,6 +206,63 @@ def test_batched_matches_legacy_exact_for_baselines(fast_eval_config):
     batched_res = run_backtest(policies, fast_eval_config, n_episodes=10, show_progress=False, legacy=False, batch_size=4)
     pd.testing.assert_frame_equal(legacy_res.episode_df, batched_res.episode_df)
     pd.testing.assert_frame_equal(legacy_res.step_df, batched_res.step_df)
+
+
+@pytest.mark.parametrize("observation_mode", ["full", "no_greeks", "price_only"])
+@pytest.mark.parametrize("legacy", [False, True])
+def test_baselines_run_in_every_observation_mode(
+    fast_eval_config, observation_mode, legacy
+):
+    """Baseline policies use reset info, not a mode-specific observation index."""
+    config = replace(fast_eval_config, observation_mode=observation_mode)
+    results = run_backtest(
+        [BSDeltaPolicy(), ZeroHedgePolicy()],
+        config,
+        n_episodes=10,
+        show_progress=False,
+        legacy=legacy,
+    )
+
+    assert len(results.episode_df) == 20
+    assert results.episode_df["terminal_pnl"].notna().all()
+
+
+@pytest.mark.parametrize("observation_mode", ["full", "no_greeks", "price_only"])
+@pytest.mark.parametrize("legacy", [False, True])
+def test_baseline_pnl_is_identical_across_observation_modes(
+    fast_eval_config, observation_mode, legacy
+):
+    """Observation feature selection must not change baseline accounting."""
+    full = run_backtest(
+        [BSDeltaPolicy(), ZeroHedgePolicy()],
+        replace(fast_eval_config, observation_mode="full"),
+        n_episodes=10,
+        show_progress=False,
+        legacy=legacy,
+    )
+    mode = run_backtest(
+        [BSDeltaPolicy(), ZeroHedgePolicy()],
+        replace(fast_eval_config, observation_mode=observation_mode),
+        n_episodes=10,
+        show_progress=False,
+        legacy=legacy,
+    )
+    np.testing.assert_array_equal(
+        full.episode_df["terminal_pnl"].to_numpy(),
+        mode.episode_df["terminal_pnl"].to_numpy(),
+    )
+
+
+def test_initial_info_does_not_index_reduced_observation(fast_eval_config):
+    """Regression: the old ``obs[6]`` fallback raised IndexError for 3-D obs."""
+    from src.envs.hedging_env import HedgingEnv
+    from src.evaluation.backtest import _initial_info
+
+    env = HedgingEnv(**replace(fast_eval_config, observation_mode="price_only").as_dict())
+    obs, reset_info = env.reset(seed=0)
+    assert obs.shape == (3,)
+    assert _initial_info(reset_info) == reset_info
+    assert reset_info["bs_delta"] == env._bs_deltas[0]
 
 
 def test_batched_matches_legacy_for_rl_agent_checkpoint(fast_eval_config):

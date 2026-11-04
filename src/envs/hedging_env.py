@@ -290,7 +290,13 @@ class HedgingEnv(gym.Env):
             cumulative_pnl=0.0,
             cumulative_cost=0.0,
         )
-        return self._build_obs(), {}
+        reset_info = {
+            "S": float(self.state.S),
+            "bs_delta": float(self._bs_deltas[0]),
+            "hedge_pos": float(self.state.hedge_pos),
+            "option_value": float(self.state.option_value),
+        }
+        return self._build_obs(), reset_info
 
     def step(
         self, action: np.ndarray
