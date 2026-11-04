@@ -1,9 +1,31 @@
 """Tests for the Gymnasium hedging environment."""
 
 import numpy as np
+import pytest
 from gymnasium.utils.env_checker import check_env
 
+from src.envs.hedging_env import HedgingEnv
 from src.envs.reward import compute_step_reward, compute_terminal_reward
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_keys"),
+    [
+        ("full", HedgingEnv.OBS_KEYS),
+        ("no_greeks", ["price_ratio", "time_remaining", "r", "strike_ratio", "hedge_pos"]),
+        ("price_only", ["price_ratio", "time_remaining", "hedge_pos"]),
+        ("no_bs_delta", ["price_ratio", "time_remaining", "sigma", "r", "strike_ratio", "hedge_pos"]),
+        ("no_bs_delta_no_sigma", ["price_ratio", "time_remaining", "r", "strike_ratio", "hedge_pos"]),
+    ],
+)
+def test_observation_modes_derive_keys_and_dimensions(mode, expected_keys):
+    """Every opt-in observation mode exposes the declared feature subset."""
+    env = HedgingEnv(observation_mode=mode)
+    obs, _ = env.reset(seed=0)
+
+    assert env.OBS_KEYS_BY_MODE[mode] == expected_keys
+    assert env.observation_space.shape == (len(expected_keys),)
+    assert obs.shape == (len(expected_keys),)
 
 
 def test_env_checker(env):

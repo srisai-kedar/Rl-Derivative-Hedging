@@ -29,7 +29,17 @@ from src.evaluation.plots import (
 )
 from src.training.env_factory import load_env_for_inference
 from src.training.hyperparams import load_config
-from src.utils.manifest import verify_checkpoint_integrity, write_manifest
+from src.training.observation import (
+    model_observation_dimension,
+    validate_observation_dimensions,
+    vecnormalize_observation_dimension,
+    vecnormalize_stats_dimension,
+)
+from src.utils.manifest import (
+    validate_manifest_environment,
+    verify_checkpoint_integrity,
+    write_manifest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +75,7 @@ def evaluate(
     batch_size: int = 128,
     legacy: bool = False,
     allow_unverified: bool = False,
+    allow_manifest_mismatch: bool = False,
 ) -> None:
     """Evaluate SAC alongside BS-delta and zero-hedge baselines."""
     from src.evaluation.backtest import HedgingPolicy
@@ -78,6 +89,11 @@ def evaluate(
         vecnorm_path=vecnorm_path,
         allow_unverified=allow_unverified,
     )
+    validate_manifest_environment(
+        checkpoint_path,
+        config.eval_environment,
+        allow_mismatch=allow_manifest_mismatch,
+    )
 
     model = SAC.load(checkpoint_path)
     vec_normalize = load_env_for_inference(
@@ -85,10 +101,22 @@ def evaluate(
         vecnorm_path,
         seed=config.run.seed,
         allow_unverified=allow_unverified,
+        model=model,
+        allow_manifest_mismatch=allow_manifest_mismatch,
     )
     try:
+        validate_observation_dimensions(
+            env_dimension=vecnormalize_observation_dimension(vec_normalize),
+            model_dimension=model_observation_dimension(model),
+            vecnorm_dimension=vecnormalize_stats_dimension(vec_normalize),
+            observation_mode=config.eval_environment.observation_mode,
+        )
         policies: list[HedgingPolicy] = [
-            RLAgentPolicy(model, vec_normalize),
+            RLAgentPolicy(
+                model,
+                vec_normalize,
+                observation_mode=config.eval_environment.observation_mode,
+            ),
             BSDeltaPolicy(),
             ZeroHedgePolicy(),
         ]
@@ -147,6 +175,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=128, help="Batch size for vectorised backtest")
     parser.add_argument("--legacy-backtest", action="store_true", help="Use legacy sequential backtester")
     parser.add_argument("--allow-unverified", action="store_true", help="Allow loading checkpoint even if manifest hash check fails")
+    parser.add_argument("--allow-manifest-mismatch", action="store_true", help="Warn instead of raising when manifest environment settings differ")
     args = parser.parse_args()
     evaluate(
         checkpoint_path=args.checkpoint,
@@ -158,6 +187,7 @@ def main() -> None:
         batch_size=args.batch_size,
         legacy=args.legacy_backtest,
         allow_unverified=args.allow_unverified,
+        allow_manifest_mismatch=args.allow_manifest_mismatch,
     )
 
 

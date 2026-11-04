@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import os
+import pickle
 from collections.abc import Callable
 from typing import cast
 
@@ -14,6 +15,11 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from src.envs.hedging_env import HedgingEnv
 from src.training.hyperparams import EnvironmentConfig, VecNormalizeConfig
+from src.training.observation import (
+    model_observation_dimension,
+    validate_observation_dimensions,
+    vecnormalize_stats_dimension,
+)
 
 
 class FreshResetSeedWrapper(gym.Wrapper):
@@ -131,6 +137,8 @@ def load_env_for_inference(
     vecnorm_path: str,
     seed: int = 0,
     allow_unverified: bool = False,
+    model: object | None = None,
+    allow_manifest_mismatch: bool = False,
 ) -> VecNormalize:
     """
     Load saved VecNormalize statistics around a fresh evaluation environment.
@@ -139,12 +147,31 @@ def load_env_for_inference(
     returns raw rewards. If a run_manifest.json exists in the checkpoint directory,
     cryptographic integrity is verified.
     """
-    from src.utils.manifest import verify_checkpoint_integrity
+    from src.utils.manifest import (
+        validate_manifest_environment,
+        verify_checkpoint_integrity,
+    )
 
     verify_checkpoint_integrity(checkpoint_path=vecnorm_path, vecnorm_path=vecnorm_path, allow_unverified=allow_unverified)
+    validate_manifest_environment(
+        vecnorm_path,
+        env_config,
+        allow_mismatch=allow_manifest_mismatch,
+    )
 
     eval_env = DummyVecEnv([_make_env_fn(env_config, rank=0, base_seed=seed)])
-    vec_env = VecNormalize.load(vecnorm_path, eval_env)
+    # Integrity has been verified before deserializing this pickle. Inspect the
+    # saved stats before VecNormalize.set_venv() can raise an opaque SB3 shape
+    # assertion, so callers receive the mode-labeled compatibility error.
+    with open(vecnorm_path, "rb") as file:
+        vec_env = pickle.load(file)
+    validate_observation_dimensions(
+        env_dimension=int(eval_env.observation_space.shape[0]),
+        model_dimension=model_observation_dimension(model) if model is not None else None,
+        vecnorm_dimension=vecnormalize_stats_dimension(vec_env),
+        observation_mode=env_config.observation_mode,
+    )
+    vec_env.set_venv(eval_env)
     vec_env.training = False
     vec_env.norm_reward = False
     return vec_env

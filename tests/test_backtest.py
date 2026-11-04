@@ -98,14 +98,21 @@ def test_evaluate_orchestrates_and_saves_outputs(monkeypatch, backtest_results_f
     import src.evaluation.evaluate as evaluation
 
     saved_figures = []
-    vec_normalize = SimpleNamespace(close=lambda: None)
+    observation_space = SimpleNamespace(shape=(7,))
+    vec_normalize = SimpleNamespace(
+        close=lambda: None,
+        observation_space=observation_space,
+        obs_rms=SimpleNamespace(mean=np.zeros(7)),
+        venv=SimpleNamespace(get_attr=lambda _: ["full"]),
+    )
+    model = SimpleNamespace(observation_space=observation_space)
     robustness = pd.DataFrame([
         {"kappa": kappa, "sigma": sigma, "agent_type": agent, "std_pnl": 1.0 + kappa + sigma}
         for kappa in [0.0, 0.001] for sigma in [0.2, 0.3] for agent in ["rl_agent", "bs_delta", "zero_hedge"]
     ])
     config = SimpleNamespace(eval_environment=fast_eval_config, results_dir=str(tmp_path), run=SimpleNamespace(seed=0))
     monkeypatch.setattr(evaluation, "load_config", lambda _: config)
-    monkeypatch.setattr(evaluation.SAC, "load", lambda _: SimpleNamespace())
+    monkeypatch.setattr(evaluation.SAC, "load", lambda _: model)
     monkeypatch.setattr(evaluation, "load_env_for_inference", lambda *args, **kwargs: vec_normalize)
     monkeypatch.setattr(evaluation, "run_backtest", lambda *args, **kwargs: backtest_results_fixture)
     monkeypatch.setattr(evaluation, "run_robustness_sweep", lambda *args, **kwargs: robustness)

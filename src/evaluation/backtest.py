@@ -16,6 +16,13 @@ from tqdm import tqdm
 
 from src.envs.hedging_env import HedgingEnv
 from src.training.hyperparams import EnvironmentConfig
+from src.training.observation import (
+    infer_observation_mode,
+    model_observation_dimension,
+    validate_observation_dimensions,
+    vecnormalize_observation_dimension,
+    vecnormalize_stats_dimension,
+)
 
 logger = logging.getLogger(__name__)
 EPISODE_COLUMNS = ["episode_id", "agent_type", "seed", "terminal_pnl", "total_cost", "n_steps"]
@@ -110,10 +117,23 @@ class RLAgentPolicy:
 
     name: ClassVar[str] = "rl_agent"
 
-    def __init__(self, model: SAC, vec_normalize: VecNormalize, deterministic: bool = True) -> None:
+    def __init__(
+        self,
+        model: SAC,
+        vec_normalize: VecNormalize,
+        deterministic: bool = True,
+        observation_mode: str | None = None,
+    ) -> None:
         self.model = model
         self.vn = vec_normalize
         self.deterministic = deterministic
+        mode = observation_mode or infer_observation_mode(vec_normalize)
+        validate_observation_dimensions(
+            env_dimension=vecnormalize_observation_dimension(vec_normalize),
+            model_dimension=model_observation_dimension(model),
+            vecnorm_dimension=vecnormalize_stats_dimension(vec_normalize),
+            observation_mode=mode,
+        )
 
     def predict(self, obs: np.ndarray, info: dict) -> float:
         action, _ = self.model.predict(self._normalise(obs)[np.newaxis, :], deterministic=self.deterministic)

@@ -9,8 +9,10 @@ import pytest
 
 from src.utils.manifest import (
     IntegrityError,
+    ManifestConfigMismatchError,
     compute_file_sha256,
     get_git_info,
+    validate_manifest_environment,
     verify_checkpoint_integrity,
     write_manifest,
 )
@@ -129,3 +131,26 @@ def test_load_env_for_inference_tamper_detection(tmp_path):
 
     # allow_unverified=True bypasses the integrity error (though pickle might fail if bytes are garbage)
     eval_env.close()
+
+
+def test_manifest_environment_mismatch_can_raise_or_warn(tmp_path, caplog):
+    """Evaluation cannot silently use a different market model or mode."""
+    from src.training.hyperparams import EnvironmentConfig
+
+    write_manifest(
+        output_dir=tmp_path,
+        run_type="training",
+        config={
+            "eval_environment": {
+                "observation_mode": "full",
+                "market_model": "gbm",
+            }
+        },
+    )
+    config = EnvironmentConfig(observation_mode="no_bs_delta", market_model="heston")
+
+    with pytest.raises(ManifestConfigMismatchError, match="observation_mode"):
+        validate_manifest_environment(tmp_path / "vecnorm.pkl", config)
+
+    validate_manifest_environment(tmp_path / "vecnorm.pkl", config, allow_mismatch=True)
+    assert "Continuing because allow_mismatch=True" in caplog.text

@@ -28,6 +28,10 @@ class IntegrityError(ValueError):
     """Raised when checkpoint cryptographic verification fails against run_manifest.json."""
 
 
+class ManifestConfigMismatchError(ValueError):
+    """Raised when checkpoint manifest environment settings differ from evaluation."""
+
+
 def compute_file_sha256(path: str | Path) -> str:
     """Compute SHA-256 hash of a file in 64 KiB chunks."""
     p = Path(path)
@@ -255,3 +259,40 @@ def verify_checkpoint_integrity(
                     logger.warning("%s Continuing because allow_unverified=True.", msg)
                 else:
                     raise IntegrityError(msg)
+
+
+def validate_manifest_environment(
+    vecnorm_path: str | Path,
+    env_config: Any,
+    allow_mismatch: bool = False,
+) -> None:
+    """Compare manifest market settings with the evaluation environment config."""
+    vecnorm_p = Path(vecnorm_path)
+    manifest_file = vecnorm_p.parent / "run_manifest.json"
+    if not manifest_file.is_file():
+        return
+
+    with open(manifest_file, encoding="utf-8") as f:
+        manifest = json.load(f)
+    config_data = manifest.get("config", {}).get("data", {})
+    stored_environment = config_data.get("eval_environment") or config_data.get("environment")
+    if not isinstance(stored_environment, dict):
+        stored_environment = config_data
+    expected = env_config.as_dict()
+    mismatches = []
+    for key in ("observation_mode", "market_model"):
+        if key in stored_environment and stored_environment[key] != expected[key]:
+            mismatches.append(
+                f"{key}: manifest={stored_environment[key]!r}, evaluation={expected[key]!r}"
+            )
+    if not mismatches:
+        return
+
+    message = (
+        f"Manifest environment mismatch at {manifest_file}: "
+        + "; ".join(mismatches)
+    )
+    if allow_mismatch:
+        logger.warning("%s Continuing because allow_mismatch=True.", message)
+    else:
+        raise ManifestConfigMismatchError(message)

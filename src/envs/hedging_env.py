@@ -37,6 +37,27 @@ from src.simulation.merton import MertonJumpDiffusionSimulator
 
 _MARKET_MODELS = {"gbm", "heston", "merton"}
 
+_OBS_KEYS = [
+    "price_ratio",
+    "time_remaining",
+    "sigma",
+    "r",
+    "strike_ratio",
+    "hedge_pos",
+    "bs_delta",
+]
+_OBS_MODE_INDICES = {
+    "full": [0, 1, 2, 3, 4, 5, 6],
+    "no_greeks": [0, 1, 3, 4, 5],
+    "price_only": [0, 1, 5],
+    "no_bs_delta": [0, 1, 2, 3, 4, 5],
+    "no_bs_delta_no_sigma": [0, 1, 3, 4, 5],
+}
+_OBS_KEYS_BY_MODE = {
+    mode: [_OBS_KEYS[index] for index in indices]
+    for mode, indices in _OBS_MODE_INDICES.items()
+}
+
 _MAX_SEED = np.iinfo(np.int32).max
 _MIN_TIME_FOR_DELTA = 1e-8  # avoids 0/0 in d1 at expiry; delta is a step there
 
@@ -75,24 +96,10 @@ class HedgingEnv(gym.Env):
         ``info["financing_cost"]``, *not* in transaction cost).
     """
 
-    OBS_KEYS: ClassVar[list[str]] = [
-        "price_ratio",
-        "time_remaining",
-        "sigma",
-        "r",
-        "strike_ratio",
-        "hedge_pos",
-        "bs_delta",
-    ]
-    # Observation mode → subset of OBS_KEYS indices
-    # "full"       = all 7 features (default; required for existing checkpoints)
-    # "no_greeks"  = drop "sigma" and "bs_delta" → 5-d
-    # "price_only" = keep price_ratio, time_remaining, hedge_pos → 3-d
-    _OBS_MODES: ClassVar[dict[str, list[int]]] = {
-        "full":       [0, 1, 2, 3, 4, 5, 6],
-        "no_greeks":  [0, 1, 3, 4, 5],
-        "price_only": [0, 1, 5],
-    }
+    OBS_KEYS: ClassVar[list[str]] = _OBS_KEYS
+    OBS_MODE_INDICES: ClassVar[dict[str, list[int]]] = _OBS_MODE_INDICES
+    OBS_KEYS_BY_MODE: ClassVar[dict[str, list[str]]] = _OBS_KEYS_BY_MODE
+    _OBS_MODES = OBS_MODE_INDICES
     _OBS_LOW: ClassVar[np.ndarray] = np.array(
         [0.0, 0.0, 0.01, 0.00, 0.5, 0.0, 0.0], dtype=np.float32
     )

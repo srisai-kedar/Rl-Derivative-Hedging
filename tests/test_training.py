@@ -203,12 +203,15 @@ def test_checkpoint_save_and_load(trained_run):
     model_path = str(checkpoint_dir / "final_model")
     vecnorm_path = str(checkpoint_dir / "final_vecnorm.pkl")
 
+    model = SAC.load(model_path)
+
     assert os.path.exists(vecnorm_path), "final_vecnorm.pkl not found"
 
     inf_env = load_env_for_inference(
         env_config=config.eval_environment,
         vecnorm_path=vecnorm_path,
         seed=42,
+        model=model,
     )
     model = SAC.load(model_path, env=inf_env)
 
@@ -299,3 +302,42 @@ def test_load_env_for_inference(trained_run):
     obs = inf_env.reset()
     assert obs.shape == (1, 7)
     inf_env.close()
+
+
+def test_rl_agent_policy_rejects_observation_dimension_mismatch():
+    """Checkpoint/model/VecNormalize dimensions must agree before prediction."""
+    from types import SimpleNamespace
+
+    from src.evaluation.backtest import RLAgentPolicy
+
+    model = SimpleNamespace(observation_space=SimpleNamespace(shape=(7,)))
+    vec_normalize = SimpleNamespace(
+        observation_space=SimpleNamespace(shape=(5,)),
+        obs_rms=SimpleNamespace(mean=np.zeros(5)),
+        venv=SimpleNamespace(get_attr=lambda _: ["no_bs_delta_no_sigma"]),
+    )
+    with pytest.raises(ValueError, match="observation_mode='no_bs_delta_no_sigma'.*model=7"):
+        RLAgentPolicy(model, vec_normalize)
+
+
+def test_load_env_for_inference_rejects_vecnorm_dimension_mismatch(tmp_path):
+    """A saved 7-D VecNormalize file cannot load into a reduced mode."""
+    from src.envs.hedging_env import HedgingEnv
+    from src.training.env_factory import (
+        DummyVecEnv,
+        VecNormalize,
+        load_env_for_inference,
+    )
+    from src.training.hyperparams import EnvironmentConfig
+
+    vecnorm_file = tmp_path / "vecnorm.pkl"
+    source_env = DummyVecEnv([lambda: HedgingEnv(observation_mode="full")])
+    source_vecnorm = VecNormalize(source_env)
+    source_vecnorm.save(str(vecnorm_file))
+
+    with pytest.raises(ValueError, match="observation_mode='price_only'.*env=3"):
+        load_env_for_inference(
+            EnvironmentConfig(observation_mode="price_only"),
+            str(vecnorm_file),
+        )
+    source_env.close()
