@@ -32,6 +32,10 @@ from src.envs.reward import compute_step_reward
 from src.finance.black_scholes import call_delta, call_price
 from src.finance.transaction_costs import proportional_cost
 from src.simulation.gbm import GBMSimulator
+from src.simulation.heston import HestonSimulator
+from src.simulation.merton import MertonJumpDiffusionSimulator
+
+_MARKET_MODELS = {"gbm", "heston", "merton"}
 
 _MAX_SEED = np.iinfo(np.int32).max
 _MIN_TIME_FOR_DELTA = 1e-8  # avoids 0/0 in d1 at expiry; delta is a step there
@@ -80,6 +84,15 @@ class HedgingEnv(gym.Env):
         "hedge_pos",
         "bs_delta",
     ]
+    # Observation mode → subset of OBS_KEYS indices
+    # "full"       = all 7 features (default; required for existing checkpoints)
+    # "no_greeks"  = drop "sigma" and "bs_delta" → 5-d
+    # "price_only" = keep price_ratio, time_remaining, hedge_pos → 3-d
+    _OBS_MODES: ClassVar[dict[str, list[int]]] = {
+        "full":       [0, 1, 2, 3, 4, 5, 6],
+        "no_greeks":  [0, 1, 3, 4, 5],
+        "price_only": [0, 1, 5],
+    }
     _OBS_LOW: ClassVar[np.ndarray] = np.array(
         [0.0, 0.0, 0.01, 0.00, 0.5, 0.0, 0.0], dtype=np.float32
     )
@@ -104,9 +117,16 @@ class HedgingEnv(gym.Env):
         risk_aversion: float = 0.0,
         liquidate_at_expiry: bool = False,
         include_financing: bool = False,
+        market_model: str = "gbm",
+        market_model_kwargs: dict[str, Any] | None = None,
+        observation_mode: str = "full",
     ) -> None:
         super().__init__()
         self._validate_config(S0, K, T, r, sigma, dt, kappa, sigma_range, risk_aversion)
+        if market_model not in _MARKET_MODELS:
+            raise ConfigurationError(
+                f"market_model must be one of {sorted(_MARKET_MODELS)}, got {market_model!r}."
+            )
 
         self.S0 = float(S0)
         self.K = float(K)
@@ -121,6 +141,16 @@ class HedgingEnv(gym.Env):
         self.risk_aversion = float(risk_aversion)
         self.liquidate_at_expiry = liquidate_at_expiry
         self.include_financing = include_financing
+        self.market_model = market_model
+        self.market_model_kwargs: dict[str, Any] = market_model_kwargs or {}
+
+        if observation_mode not in self._OBS_MODES:
+            raise ConfigurationError(
+                f"observation_mode must be one of {sorted(self._OBS_MODES)}, "
+                f"got {observation_mode!r}."
+            )
+        self.observation_mode = observation_mode
+        self._obs_indices = self._OBS_MODES[observation_mode]
 
         self._seed = seed
         self._first_reset = True
@@ -129,8 +159,11 @@ class HedgingEnv(gym.Env):
         self._option_values: np.ndarray = np.empty(0)
         self._bs_deltas: np.ndarray = np.empty(0)
 
+        obs_idx = self._OBS_MODES[observation_mode]
         self.observation_space = spaces.Box(
-            low=self._OBS_LOW.copy(), high=self._OBS_HIGH.copy(), dtype=np.float32
+            low=self._OBS_LOW[obs_idx].copy(),
+            high=self._OBS_HIGH[obs_idx].copy(),
+            dtype=np.float32,
         )
         self.action_space = spaces.Box(
             low=np.array([0.0], dtype=np.float32),
@@ -225,10 +258,7 @@ class HedgingEnv(gym.Env):
             if seed is not None
             else int(self.np_random.integers(0, _MAX_SEED))
         )
-        sim = GBMSimulator(
-            S0=self.S0, mu=self.r, sigma=self.sigma, dt=self.dt, seed=path_seed
-        )
-        price_path = sim.generate_path(self.T)
+        price_path = self._generate_price_path(path_seed)
 
         # One vectorised pass over all T+1 dates (replaces 2 scalar calls/step).
         t_rem = (self.T - np.arange(self.T + 1)) * self.dt
@@ -322,10 +352,58 @@ class HedgingEnv(gym.Env):
     # ------------------------------------------------------------------ #
     # Helpers
     # ------------------------------------------------------------------ #
+
+    def _generate_price_path(self, seed: int) -> np.ndarray:
+        """Generate a price path using the configured market model."""
+        if self.market_model == "gbm":
+            sim = GBMSimulator(
+                S0=self.S0, mu=self.r, sigma=self.sigma, dt=self.dt, seed=seed
+            )
+        elif self.market_model == "heston":
+            # Defaults: v0=sigma^2, kappa=2, theta=sigma^2, xi=0.3, rho=-0.7
+            kwargs = {
+                "v0": self.sigma ** 2,
+                "kappa": 2.0,
+                "theta": self.sigma ** 2,
+                "xi": 0.3,
+                "rho": -0.7,
+            }
+            kwargs.update(self.market_model_kwargs)
+            sim = HestonSimulator(  # type: ignore[assignment]
+                S0=self.S0,
+                mu=self.r,
+                dt=self.dt,
+                seed=seed,
+                **kwargs,
+            )
+        elif self.market_model == "merton":
+            # Defaults: lam=1 jump/yr, mu_J=-0.05, sigma_J=0.1
+            kwargs = {
+                "lam": 1.0,
+                "mu_J": -0.05,
+                "sigma_J": 0.10,
+            }
+            kwargs.update(self.market_model_kwargs)
+            sim = MertonJumpDiffusionSimulator(  # type: ignore[assignment]
+                S0=self.S0,
+                mu=self.r,
+                sigma=self.sigma,
+                dt=self.dt,
+                seed=seed,
+                **kwargs,
+            )
+        else:
+            raise ConfigurationError(f"Unknown market_model: {self.market_model!r}")
+        return sim.generate_path(self.T)
+
     def _build_obs(self) -> np.ndarray:
-        """Build the 7-d observation from the current episode state."""
+        """Build the observation vector from the current episode state.
+
+        The full 7-d feature vector is constructed first, then sliced
+        according to ``self.observation_mode``.
+        """
         assert self.state is not None  # internal invariant, not user input
-        obs = np.array(
+        full_obs = np.array(
             [
                 self.state.S / self.S0,
                 self.state.time_remaining,
@@ -337,7 +415,8 @@ class HedgingEnv(gym.Env):
             ],
             dtype=np.float32,
         )
-        return np.clip(obs, self._OBS_LOW, self._OBS_HIGH)
+        obs = np.clip(full_obs, self._OBS_LOW, self._OBS_HIGH)[self._obs_indices]
+        return obs
 
     def _build_info(self, cost: float, step_pnl: float) -> dict[str, Any]:
         """Per-step diagnostics (raw, un-shaped P&L)."""
