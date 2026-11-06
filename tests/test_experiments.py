@@ -109,6 +109,6 @@ def test_multiseed_passes_per_run_config_and_exact_checkpoint(monkeypatch, tmp_p
     train_config = commands[0][commands[0].index("--config") + 1]
     evaluate_config = commands[1][commands[1].index("--config") + 1]
     assert train_config == evaluate_config
-    assert commands[1][commands[1].index("--checkpoint") + 1].endswith(
-        "exact\\model.zip"
-    )
+    checkpoint = Path(commands[1][commands[1].index("--checkpoint") + 1])
+    assert checkpoint.parent.name == "exact"
+    assert checkpoint.name == "model.zip"
