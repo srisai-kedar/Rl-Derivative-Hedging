@@ -21,7 +21,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        include:
+          - python-version: "3.11"
+            lockfile: requirements-py311.lock.txt
+          - python-version: "3.12"
+            lockfile: requirements-py312.lock.txt
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,7 +35,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-py${{ matrix.python-version }}.lock.txt -r requirements-dev.txt
+          pip install -r ${{ matrix.lockfile }} -r requirements-dev.txt
           pip install -e .
       - name: Ruff (lint + format check)
         run: |
