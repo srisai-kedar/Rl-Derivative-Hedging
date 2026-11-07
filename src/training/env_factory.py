@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import copy
 import os
-from collections.abc import Callable
+import pickle
+from collections.abc import Callable, Mapping
 from typing import cast
 
 import gymnasium as gym
@@ -14,6 +15,11 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from src.envs.hedging_env import HedgingEnv
 from src.training.hyperparams import EnvironmentConfig, VecNormalizeConfig
+from src.training.observation import (
+    model_observation_dimension,
+    validate_observation_dimensions,
+    vecnormalize_stats_dimension,
+)
 
 
 class FreshResetSeedWrapper(gym.Wrapper):
@@ -105,9 +111,7 @@ def build_eval_env(
     Evaluation returns raw rewards, so ``norm_reward`` is disabled while
     observation normalization is synced from the current training environment.
     """
-    eval_env = DummyVecEnv(
-        [_make_env_fn(env_config, rank=0, base_seed=seed + 10_000)]
-    )
+    eval_env = DummyVecEnv([_make_env_fn(env_config, rank=0, base_seed=seed + 10_000)])
     vec_env = VecNormalize(
         eval_env,
         norm_obs=train_env.norm_obs,
@@ -130,15 +134,54 @@ def load_env_for_inference(
     env_config: EnvironmentConfig,
     vecnorm_path: str,
     seed: int = 0,
+    allow_unverified: bool = False,
+    model: object | None = None,
+    allow_manifest_mismatch: bool = False,
+    checkpoint_path: str | None = None,
+    require_manifest: bool = False,
+    expected_sha256: Mapping[str, str] | str | None = None,
 ) -> VecNormalize:
     """
     Load saved VecNormalize statistics around a fresh evaluation environment.
 
     The loaded environment is ready for deterministic inference/evaluation and
-    returns raw rewards.
+    returns raw rewards. If a run_manifest.json exists in the checkpoint directory,
+    cryptographic integrity is verified.
     """
+    from src.utils.manifest import (
+        validate_manifest_environment,
+        verify_checkpoint_integrity,
+    )
+
+    verify_checkpoint_integrity(
+        checkpoint_path=checkpoint_path,
+        vecnorm_path=vecnorm_path,
+        allow_unverified=allow_unverified,
+        require_manifest=require_manifest,
+        expected_sha256=expected_sha256,
+    )
+    validate_manifest_environment(
+        vecnorm_path,
+        env_config,
+        allow_mismatch=allow_manifest_mismatch,
+        checkpoint_path=checkpoint_path,
+    )
+
     eval_env = DummyVecEnv([_make_env_fn(env_config, rank=0, base_seed=seed)])
-    vec_env = VecNormalize.load(vecnorm_path, eval_env)
+    # Integrity has been verified before deserializing this pickle. Inspect the
+    # saved stats before VecNormalize.set_venv() can raise an opaque SB3 shape
+    # assertion, so callers receive the mode-labeled compatibility error.
+    with open(vecnorm_path, "rb") as file:
+        vec_env = pickle.load(file)
+    validate_observation_dimensions(
+        env_dimension=int(eval_env.observation_space.shape[0]),
+        model_dimension=model_observation_dimension(model)
+        if model is not None
+        else None,
+        vecnorm_dimension=vecnormalize_stats_dimension(vec_env),
+        observation_mode=env_config.observation_mode,
+    )
+    vec_env.set_venv(eval_env)
     vec_env.training = False
     vec_env.norm_reward = False
     return vec_env

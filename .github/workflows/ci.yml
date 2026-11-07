@@ -21,7 +21,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        include:
+          - python-version: "3.11"
+            lockfile: requirements-py311.lock.txt
+            dev-lockfile: requirements-dev-py311.lock.txt
+          - python-version: "3.12"
+            lockfile: requirements-py312.lock.txt
+            dev-lockfile: requirements-dev-py312.lock.txt
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,12 +37,14 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt hypothesis
-          pip install -e .
+          python -m pip install --require-hashes \
+            -r ${{ matrix.lockfile }} \
+            -r ${{ matrix.dev-lockfile }}
+          python -m pip install --no-deps -e .
       - name: Ruff (lint + format check)
         run: |
           ruff check src tests
-          ruff format --check src/envs src/evaluation/uncertainty.py
+          ruff format --check .
       - name: Mypy
         run: mypy src
       - name: Tests with coverage gate
@@ -44,17 +52,30 @@ jobs:
           pytest tests/ -m "not slow" --ignore=tests/test_hpo.py
           --cov=src --cov-report=xml --cov-report=term-missing --cov-fail-under=85
       - name: Optimised-mode smoke test (asserts are stripped under -O)
-        run: >
-          python -O -c "from src.envs.hedging_env import HedgingEnv, ConfigurationError;
-          import numpy as np;
-          e=HedgingEnv();
-          try: HedgingEnv(S0=-1)
-          except ConfigurationError: pass
-          else: raise SystemExit('validation vanished under -O')
-          e.reset(seed=0);
-          try: e.step(np.array([np.nan]))
-          except ValueError: pass
-          else: raise SystemExit('NaN guard vanished under -O')"
+        shell: bash
+        run: |
+          python -O - <<'PY'
+          from src.envs.hedging_env import HedgingEnv, ConfigurationError
+          import numpy as np
+
+          env = HedgingEnv()
+
+          try:
+              HedgingEnv(S0=-1)
+          except ConfigurationError:
+              pass
+          else:
+              raise SystemExit("validation vanished under -O")
+
+          env.reset(seed=0)
+
+          try:
+              env.step(np.array([np.nan]))
+          except ValueError:
+              pass
+          else:
+              raise SystemExit("NaN guard vanished under -O")
+          PY
       - uses: codecov/codecov-action@v4
         if: matrix.python-version == '3.12'
         with:
@@ -69,4 +90,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - run: pip install pip-audit && pip-audit -r requirements.txt
+      - name: Audit all hashed lockfiles
+        run: |
+          python -m pip install pip-audit
+          pip-audit --require-hashes \
+            -r requirements-py311.lock.txt \
+            -r requirements-dev-py311.lock.txt
+          pip-audit --require-hashes \
+            -r requirements-py312.lock.txt \
+            -r requirements-dev-py312.lock.txt

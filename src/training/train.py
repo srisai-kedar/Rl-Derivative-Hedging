@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 from datetime import datetime
@@ -19,6 +20,8 @@ from src.training.callbacks import (
 )
 from src.training.env_factory import build_eval_env, build_training_envs
 from src.training.hyperparams import TrainingConfig, load_config
+from src.utils.logging import configure_run_logging
+from src.utils.manifest import write_manifest
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 def setup_output_dirs(config: TrainingConfig) -> tuple[str, str]:
     """Create timestamped checkpoint and result directories for a training run."""
+    configure_run_logging(
+        f"{getattr(config.run, 'name', 'run')}-seed{getattr(config.run, 'seed', 0)}"
+    )
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_name = f"{config.run.name}_{timestamp}"
 
@@ -109,21 +115,30 @@ def build_callbacks(
     return CallbackList([metrics_cb, checkpoint_cb, eval_cb])
 
 
-def train(config_path: str = "configs/training.yaml") -> None:
+def train(
+    config_path: str = "configs/training.yaml", run_info_path: str | None = None
+) -> None:
     """
     Run SAC training and always save final model/VecNormalize stats as a pair.
 
     This function is the importable entry point used by tests and the CLI.
     """
     config = load_config(config_path)
+    configure_run_logging(
+        f"{getattr(config.run, 'name', 'run')}-seed{getattr(config.run, 'seed', 0)}"
+    )
     np.random.seed(config.run.seed)
 
     train_env: VecNormalize | None = None
     eval_env: VecNormalize | None = None
     model: SAC | None = None
+    checkpoint_dir: str | None = None
+    results_dir: str | None = None
+    run_status = "interrupted"
 
     try:
         checkpoint_dir, results_dir = setup_output_dirs(config)
+        configure_run_logging(os.path.basename(checkpoint_dir))
 
         train_env = build_training_envs(
             env_config=config.environment,
@@ -155,13 +170,67 @@ def train(config_path: str = "configs/training.yaml") -> None:
                 reset_num_timesteps=True,
                 progress_bar=config.run.progress_bar,
             )
+            run_status = "completed"
         finally:
-            final_model_path = os.path.join(checkpoint_dir, "final_model")
-            final_vecnorm_path = os.path.join(checkpoint_dir, "final_vecnorm.pkl")
-            model.save(final_model_path)
-            train_env.save(final_vecnorm_path)
-            logger.info("Final model and VecNormalize saved to %s", checkpoint_dir)
+            if (
+                model is not None
+                and train_env is not None
+                and checkpoint_dir is not None
+            ):
+                final_model_path = os.path.join(checkpoint_dir, "final_model")
+                final_vecnorm_path = os.path.join(checkpoint_dir, "final_vecnorm.pkl")
+                model.save(final_model_path)
+                train_env.save(final_vecnorm_path)
+                logger.info("Final model and VecNormalize saved to %s", checkpoint_dir)
     finally:
+        if checkpoint_dir is not None and results_dir is not None:
+            checkpoint_files = [
+                os.path.join(checkpoint_dir, filename)
+                for filename in os.listdir(checkpoint_dir)
+                if filename.endswith((".zip", ".pkl"))
+            ]
+            metadata = {
+                "status": run_status,
+                "checkpoint_files": [
+                    os.path.basename(path) for path in checkpoint_files
+                ],
+            }
+            for output_dir in (checkpoint_dir, results_dir):
+                write_manifest(
+                    output_dir=output_dir,
+                    run_type="training",
+                    config=config,
+                    seed=config.run.seed,
+                    checkpoint_files=checkpoint_files,
+                    extra_metadata=metadata,
+                )
+        if run_info_path is not None:
+            info_path = os.path.abspath(run_info_path)
+            os.makedirs(os.path.dirname(info_path), exist_ok=True)
+            with open(info_path, "w", encoding="utf-8") as file:
+                json.dump(
+                    {
+                        "status": run_status,
+                        "checkpoint_dir": os.path.abspath(checkpoint_dir)
+                        if checkpoint_dir is not None
+                        else None,
+                        "checkpoint_path": os.path.abspath(
+                            os.path.join(checkpoint_dir, "final_model.zip")
+                        )
+                        if checkpoint_dir is not None
+                        else None,
+                        "vecnorm_path": os.path.abspath(
+                            os.path.join(checkpoint_dir, "final_vecnorm.pkl")
+                        )
+                        if checkpoint_dir is not None
+                        else None,
+                        "results_dir": os.path.abspath(results_dir)
+                        if results_dir is not None
+                        else None,
+                    },
+                    file,
+                    indent=2,
+                )
         if train_env is not None:
             train_env.close()
         if eval_env is not None:
@@ -177,8 +246,13 @@ def main() -> None:
         default="configs/training.yaml",
         help="Path to training config YAML",
     )
+    parser.add_argument(
+        "--run-info",
+        default=None,
+        help="Write the exact checkpoint/results directories and status as JSON",
+    )
     args = parser.parse_args()
-    train(config_path=args.config)
+    train(config_path=args.config, run_info_path=args.run_info)
 
 
 if __name__ == "__main__":

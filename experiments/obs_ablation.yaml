@@ -1,0 +1,10 @@
+name: obs_ablation
+base_config: configs/training.yaml
+seeds: [0, 1, 2, 3, 4]
+n_episodes: 1000
+results_root: results/experiments/obs_ablation
+config_overrides:
+  environment:
+    observation_mode: no_bs_delta_no_sigma
+  eval_environment:
+    observation_mode: no_bs_delta_no_sigma

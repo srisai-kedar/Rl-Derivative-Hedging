@@ -38,6 +38,14 @@ def render_metric_cards(
 
             primary_str = f"{primary_val:.4f}" if primary_val is not None else "--"
             baseline_str = f"{baseline_val:.4f}" if baseline_val is not None else "--"
+            primary_ci = _format_ci(metrics, key, "primary")
+            baseline_ci = _format_ci(metrics, key, "baseline")
+            if primary_ci:
+                primary_str += f"<br><span class='metric-ci'>95% CI {primary_ci}</span>"
+            if baseline_ci:
+                baseline_str += (
+                    f"<br><span class='metric-ci'>95% CI {baseline_ci}</span>"
+                )
 
             if primary_val is not None and baseline_val is not None:
                 improvement = compute_improvement_over_baseline(
@@ -80,3 +88,11 @@ def _agent_display_name(agent_type: str) -> str:
         "bs_delta": "BS Delta",
         "zero_hedge": "Zero Hedge",
     }.get(agent_type, agent_type)
+
+
+def _format_ci(metrics: dict, metric: str, policy: str) -> str | None:
+    """Format an optional confidence interval without breaking old metrics."""
+    interval = metrics.get("confidence_intervals", {}).get(metric, {}).get(policy)
+    if not interval:
+        return None
+    return f"[{interval['lo']:.4f}, {interval['hi']:.4f}]"

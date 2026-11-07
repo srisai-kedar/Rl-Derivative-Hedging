@@ -203,12 +203,15 @@ def test_checkpoint_save_and_load(trained_run):
     model_path = str(checkpoint_dir / "final_model")
     vecnorm_path = str(checkpoint_dir / "final_vecnorm.pkl")
 
+    model = SAC.load(model_path)
+
     assert os.path.exists(vecnorm_path), "final_vecnorm.pkl not found"
 
     inf_env = load_env_for_inference(
         env_config=config.eval_environment,
         vecnorm_path=vecnorm_path,
         seed=42,
+        model=model,
     )
     model = SAC.load(model_path, env=inf_env)
 
@@ -249,9 +252,7 @@ def test_model_actions_in_valid_range(trained_run):
     for _ in range(30):
         action, _ = model.predict(obs, deterministic=False)
         action_value = float(np.asarray(action).reshape(-1)[0])
-        assert 0.0 <= action_value <= 1.0, (
-            f"Action {action_value} is outside [0, 1]"
-        )
+        assert 0.0 <= action_value <= 1.0, f"Action {action_value} is outside [0, 1]"
         obs, _, done, _ = inf_env.step(action)
         if bool(done[0]):
             break
@@ -268,8 +269,8 @@ def test_tensorboard_log_dir_created(trained_run):
 
 def test_no_nan_during_training(trained_run):
     """Verify no NaN values appear in model parameters after short training."""
-    from stable_baselines3 import SAC
     import torch
+    from stable_baselines3 import SAC
 
     tmp_path, _ = trained_run
     checkpoint_dir = list(tmp_path.rglob("final_model.zip"))[0].parent
@@ -299,3 +300,99 @@ def test_load_env_for_inference(trained_run):
     obs = inf_env.reset()
     assert obs.shape == (1, 7)
     inf_env.close()
+
+
+def test_rl_agent_policy_rejects_observation_dimension_mismatch():
+    """Checkpoint/model/VecNormalize dimensions must agree before prediction."""
+    from types import SimpleNamespace
+
+    from src.evaluation.backtest import RLAgentPolicy
+
+    model = SimpleNamespace(observation_space=SimpleNamespace(shape=(7,)))
+    vec_normalize = SimpleNamespace(
+        observation_space=SimpleNamespace(shape=(5,)),
+        obs_rms=SimpleNamespace(mean=np.zeros(5)),
+        venv=SimpleNamespace(get_attr=lambda _: ["no_bs_delta_no_sigma"]),
+    )
+    with pytest.raises(
+        ValueError, match="observation_mode='no_bs_delta_no_sigma'.*model=7"
+    ):
+        RLAgentPolicy(model, vec_normalize)
+
+
+def test_load_env_for_inference_rejects_vecnorm_dimension_mismatch(tmp_path):
+    """A saved 7-D VecNormalize file cannot load into a reduced mode."""
+    from src.envs.hedging_env import HedgingEnv
+    from src.training.env_factory import (
+        DummyVecEnv,
+        VecNormalize,
+        load_env_for_inference,
+    )
+    from src.training.hyperparams import EnvironmentConfig
+
+    vecnorm_file = tmp_path / "vecnorm.pkl"
+    source_env = DummyVecEnv([lambda: HedgingEnv(observation_mode="full")])
+    source_vecnorm = VecNormalize(source_env)
+    source_vecnorm.save(str(vecnorm_file))
+
+    with pytest.raises(ValueError, match="observation_mode='price_only'.*env=3"):
+        load_env_for_inference(
+            EnvironmentConfig(observation_mode="price_only"),
+            str(vecnorm_file),
+        )
+    source_env.close()
+
+
+def test_interrupted_training_refreshes_manifest(tmp_path, monkeypatch):
+    """An interrupted learn still leaves a manifest covering saved finals."""
+    import json
+    from types import SimpleNamespace
+
+    import src.training.train as training
+
+    checkpoint_dir = tmp_path / "checkpoints"
+    results_dir = tmp_path / "results"
+    config = SimpleNamespace(
+        run=SimpleNamespace(seed=0, n_envs=1, progress_bar=False, total_timesteps=1),
+        environment={},
+        eval_environment={},
+        vec_normalize={},
+        tb_log_name="test",
+    )
+
+    class FakeEnv:
+        def save(self, path):
+            Path(path).write_bytes(b"vecnorm")
+
+        def close(self):
+            return None
+
+    class FakeModel:
+        def learn(self, **kwargs):
+            raise KeyboardInterrupt
+
+        def save(self, path):
+            Path(f"{path}.zip").write_bytes(b"model")
+
+    monkeypatch.setattr(training, "load_config", lambda _: config)
+
+    def fake_setup_output_dirs(_):
+        checkpoint_dir.mkdir()
+        results_dir.mkdir()
+        return str(checkpoint_dir), str(results_dir)
+
+    monkeypatch.setattr(training, "setup_output_dirs", fake_setup_output_dirs)
+    monkeypatch.setattr(training, "build_training_envs", lambda **kwargs: FakeEnv())
+    monkeypatch.setattr(training, "build_eval_env", lambda **kwargs: FakeEnv())
+    monkeypatch.setattr(training, "build_model", lambda *args, **kwargs: FakeModel())
+    monkeypatch.setattr(training, "build_callbacks", lambda *args, **kwargs: None)
+
+    with pytest.raises(KeyboardInterrupt):
+        training.train("ignored.yaml")
+
+    with open(checkpoint_dir / "run_manifest.json", encoding="utf-8") as file:
+        manifest = json.load(file)
+    assert manifest["extra"]["status"] == "interrupted"
+    assert set(manifest["checkpoint_files"]) == {"final_model.zip", "final_vecnorm.pkl"}
+    assert set(manifest["checkpoint_hashes"]) == set(manifest["checkpoint_files"])
+    assert (results_dir / "run_manifest.json").exists()

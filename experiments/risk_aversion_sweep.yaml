@@ -1,0 +1,10 @@
+name: risk_aversion_sweep
+base_config: configs/training.yaml
+seeds: [0, 1, 2, 3, 4]
+n_episodes: 1000
+results_root: results/experiments/risk_aversion_sweep
+config_overrides:
+  environment:
+    risk_aversion: 0.1
+  eval_environment:
+    risk_aversion: 0.1

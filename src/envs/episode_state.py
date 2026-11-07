@@ -28,7 +28,7 @@ class EpisodeState:
 
     # --- Mutable state (updated each step) ---
     step: int = 0
-    hedge_pos: float = 0.0  # Fraction of delta currently held [0, 1]
+    hedge_pos: float = 0.0  # Shares held per option [0, 1]
     option_value: float = 0.0  # Current BS call value
     cumulative_pnl: float = 0.0
     cumulative_cost: float = 0.0

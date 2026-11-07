@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
+import numpy as np
 import optuna
+import pytest
 
 
 def test_suggest_sac_params_returns_required_keys():
@@ -45,6 +46,87 @@ def test_learning_rate_in_valid_range():
         trial = study.ask()
         params = suggest_sac_params(trial)
         assert 1e-5 <= params["learning_rate"] <= 1e-3
+
+
+def test_hpo_seed_blocks_are_disjoint_and_multi_seeded():
+    from src.training.hpo import _eval_seed_block, _trial_seeds
+
+    eval_seeds = _eval_seed_block(5, 10_000, False)
+    assert eval_seeds == [10_000, 10_001, 10_002, 10_003, 10_004]
+    assert not set(eval_seeds) & set(range(10_000))
+    assert _trial_seeds(42, 3, 2, False) == [48, 49]
+    assert _eval_seed_block(3, 10_000, True) == [0, 1, 2]
+    assert _trial_seeds(42, 3, 2, True) == [42]
+
+
+def test_hpo_objective_definitions():
+    from src.training.hpo import score_episode_rewards
+
+    rewards = [1.0, 2.0, 3.0, 4.0]
+    assert score_episode_rewards(rewards) == pytest.approx(2.5)
+    assert score_episode_rewards(
+        rewards, "mean_minus_lambda_std", 1.0
+    ) == pytest.approx(2.5 - np.std(rewards))
+    assert score_episode_rewards(rewards, "cvar") == pytest.approx(1.0)
+    with pytest.raises(ValueError, match="objective"):
+        score_episode_rewards(rewards, "unknown")
+
+
+def test_optional_environment_search_dimensions():
+    from src.training.hpo import suggest_sac_params
+
+    study = optuna.create_study(direction="maximize")
+    params = suggest_sac_params(
+        study.ask(), search_risk_aversion=True, search_observation_mode=True
+    )
+    assert 0.0 <= params["risk_aversion"] <= 1.0
+    assert params["observation_mode"] in {
+        "full",
+        "no_greeks",
+        "price_only",
+        "no_bs_delta",
+        "no_bs_delta_no_sigma",
+    }
+
+
+def test_run_hpo_resumes_and_writes_metadata(
+    monkeypatch, fast_training_config, tmp_path
+):
+    import src.training.hpo as hpo_module
+    from src.training.hpo import run_hpo
+
+    monkeypatch.setattr(
+        hpo_module, "objective", lambda trial, *args, **kwargs: float(trial.number)
+    )
+    storage = f"sqlite:///{tmp_path / 'study.db'}"
+    first = run_hpo(
+        config_path=fast_training_config,
+        n_trials=1,
+        study_name="resume_test",
+        storage=storage,
+        eval_seed_start=10_000,
+        n_eval_episodes=2,
+        n_seeds_per_trial=2,
+        objective_name="mean_minus_lambda_std",
+        risk_lambda=0.5,
+    )
+    first_count = len(first.trials)
+    second = run_hpo(
+        config_path=fast_training_config,
+        n_trials=1,
+        study_name="resume_test",
+        storage=storage,
+        eval_seed_start=10_000,
+        n_eval_episodes=2,
+        n_seeds_per_trial=2,
+        objective_name="mean_minus_lambda_std",
+        risk_lambda=0.5,
+    )
+    assert first_count == 1
+    assert len(second.trials) == 2
+    metadata = (tmp_path / "study.db.metadata.json").read_text(encoding="utf-8")
+    assert '"n_seeds_per_trial": 2' in metadata
+    assert '"mean_minus_lambda_std"' in metadata
 
 
 @pytest.mark.slow

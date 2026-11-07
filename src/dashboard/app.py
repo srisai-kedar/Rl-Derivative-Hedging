@@ -207,9 +207,11 @@ def render_overview_page(
         return
 
     available_agents = results.episode_df["agent_type"].unique().tolist()
-    agents_to_show = available_agents if show_zero_hedge else [
-        agent for agent in available_agents if agent != "zero_hedge"
-    ]
+    agents_to_show = (
+        available_agents
+        if show_zero_hedge
+        else [agent for agent in available_agents if agent != "zero_hedge"]
+    )
 
     st.markdown(
         '<div class="section-header">Performance vs Black-Scholes Delta</div>',
@@ -342,7 +344,11 @@ def _render_monitor_chart(csv_files: list[str]) -> None:
     )
     fig.update_layout(
         **BASE_LAYOUT,
-        title={"text": "Training Episode Reward Over Time", "x": 0.5, "xanchor": "center"},
+        title={
+            "text": "Training Episode Reward Over Time",
+            "x": 0.5,
+            "xanchor": "center",
+        },
         xaxis_title="Training Time (seconds)",
         yaxis_title="Episode Reward",
     )

@@ -24,6 +24,9 @@ class EnvironmentConfig:
     risk_aversion: float = 0.0
     liquidate_at_expiry: bool = False
     include_financing: bool = False
+    market_model: str = "gbm"
+    market_model_kwargs: dict = field(default_factory=dict)
+    observation_mode: str = "full"
 
     def as_dict(self) -> dict[str, Any]:
         """Return environment parameters suitable for ``HedgingEnv(**kwargs)``."""
@@ -40,6 +43,9 @@ class EnvironmentConfig:
             "risk_aversion": self.risk_aversion,
             "liquidate_at_expiry": self.liquidate_at_expiry,
             "include_financing": self.include_financing,
+            "market_model": self.market_model,
+            "market_model_kwargs": dict(self.market_model_kwargs),
+            "observation_mode": self.observation_mode,
         }
 
 
@@ -80,7 +86,9 @@ class CallbackConfig:
     n_eval_episodes: int = 100
     save_freq: int = 100_000
     verbose: int = 1
-    eval_seed_base: int | None = None  # set (e.g. 10_000) for common-random-number evals
+    eval_seed_base: int | None = (
+        None  # set (e.g. 10_000) for common-random-number evals
+    )
 
 
 @dataclass

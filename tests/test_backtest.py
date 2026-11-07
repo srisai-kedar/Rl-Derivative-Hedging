@@ -1,15 +1,41 @@
+from __future__ import annotations
+
+import json
+from dataclasses import replace
+from pathlib import Path
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from types import SimpleNamespace
+import pytest
 
-from src.evaluation.backtest import BSDeltaPolicy, BacktestResults, ZeroHedgePolicy, load_results, run_backtest, save_results
+from src.evaluation.backtest import (
+    BacktestResults,
+    BSDeltaPolicy,
+    ZeroHedgePolicy,
+    load_results,
+    run_backtest,
+    save_results,
+)
 from src.evaluation.metrics import compare_metrics, compute_all_metrics
-from src.evaluation.plots import (plot_cost_sensitivity, plot_episode_replay, plot_hedge_ratio_over_time, plot_metric_comparison, plot_pnl_distribution, plot_robustness_heatmap)
+from src.evaluation.plots import (
+    plot_cost_sensitivity,
+    plot_episode_replay,
+    plot_hedge_ratio_over_time,
+    plot_metric_comparison,
+    plot_pnl_distribution,
+    plot_robustness_heatmap,
+)
 
 
 def _backtest(fast_eval_config, n_episodes):
-    return run_backtest([BSDeltaPolicy(), ZeroHedgePolicy()], fast_eval_config, n_episodes, show_progress=False)
+    return run_backtest(
+        [BSDeltaPolicy(), ZeroHedgePolicy()],
+        fast_eval_config,
+        n_episodes,
+        show_progress=False,
+    )
 
 
 def test_backtest_returns_backtest_results(fast_eval_config):
@@ -17,11 +43,22 @@ def test_backtest_returns_backtest_results(fast_eval_config):
 
 
 def test_episode_df_required_columns(backtest_results_fixture):
-    assert {"episode_id", "agent_type", "seed", "terminal_pnl", "total_cost"} <= set(backtest_results_fixture.episode_df.columns)
+    assert {"episode_id", "agent_type", "seed", "terminal_pnl", "total_cost"} <= set(
+        backtest_results_fixture.episode_df.columns
+    )
 
 
 def test_step_df_required_columns(backtest_results_fixture):
-    assert {"episode_id", "agent_type", "step", "price", "hedge_ratio", "bs_delta", "step_pnl", "step_cost"} <= set(backtest_results_fixture.step_df.columns)
+    assert {
+        "episode_id",
+        "agent_type",
+        "step",
+        "price",
+        "hedge_ratio",
+        "bs_delta",
+        "step_pnl",
+        "step_cost",
+    } <= set(backtest_results_fixture.step_df.columns)
 
 
 def test_correct_episode_count(backtest_results_fixture, n_eval_episodes):
@@ -32,13 +69,22 @@ def test_correct_episode_count(backtest_results_fixture, n_eval_episodes):
 def test_shared_seeds_same_price_paths(fast_eval_config):
     results = _backtest(fast_eval_config, 10)
     for episode_id in range(10):
-        bs = results.step_df[(results.step_df.agent_type == "bs_delta") & (results.step_df.episode_id == episode_id)].price.to_numpy()
-        zero = results.step_df[(results.step_df.agent_type == "zero_hedge") & (results.step_df.episode_id == episode_id)].price.to_numpy()
+        bs = results.step_df[
+            (results.step_df.agent_type == "bs_delta")
+            & (results.step_df.episode_id == episode_id)
+        ].price.to_numpy()
+        zero = results.step_df[
+            (results.step_df.agent_type == "zero_hedge")
+            & (results.step_df.episode_id == episode_id)
+        ].price.to_numpy()
         np.testing.assert_array_almost_equal(bs, zero, decimal=5)
 
 
 def test_bs_baseline_lower_std_than_zero_hedge(backtest_results_fixture):
-    assert compute_all_metrics(backtest_results_fixture, "bs_delta")["std_pnl"] < compute_all_metrics(backtest_results_fixture, "zero_hedge")["std_pnl"]
+    assert (
+        compute_all_metrics(backtest_results_fixture, "bs_delta")["std_pnl"]
+        < compute_all_metrics(backtest_results_fixture, "zero_hedge")["std_pnl"]
+    )
 
 
 def test_backtest_deterministic(fast_eval_config):
@@ -47,7 +93,9 @@ def test_backtest_deterministic(fast_eval_config):
 
 
 def test_zero_hedge_has_zero_cost(backtest_results_fixture):
-    costs = backtest_results_fixture.episode_df.query("agent_type == 'zero_hedge'").total_cost
+    costs = backtest_results_fixture.episode_df.query(
+        "agent_type == 'zero_hedge'"
+    ).total_cost
     assert (costs == 0.0).all()
 
 
@@ -57,12 +105,28 @@ def test_bs_delta_hedge_ratio_tracks_bs_delta(backtest_results_fixture):
 
 
 def test_all_plots_return_figure(backtest_results_fixture):
-    robustness = pd.DataFrame([
-        {"kappa": kappa, "sigma": sigma, "agent_type": agent, "std_pnl": 1.0 + kappa + sigma}
-        for kappa in [0.0, 0.001] for sigma in [0.2, 0.3] for agent in ["bs_delta", "zero_hedge"]
-    ])
+    robustness = pd.DataFrame(
+        [
+            {
+                "kappa": kappa,
+                "sigma": sigma,
+                "agent_type": agent,
+                "std_pnl": 1.0 + kappa + sigma,
+            }
+            for kappa in [0.0, 0.001]
+            for sigma in [0.2, 0.3]
+            for agent in ["bs_delta", "zero_hedge"]
+        ]
+    )
     metrics = compare_metrics(backtest_results_fixture)
-    figures = [plot_pnl_distribution(backtest_results_fixture), plot_hedge_ratio_over_time(backtest_results_fixture), plot_metric_comparison(metrics), plot_episode_replay(backtest_results_fixture, 0), plot_cost_sensitivity(robustness), plot_robustness_heatmap(robustness, agent_type="bs_delta")]
+    figures = [
+        plot_pnl_distribution(backtest_results_fixture),
+        plot_hedge_ratio_over_time(backtest_results_fixture),
+        plot_metric_comparison(metrics),
+        plot_episode_replay(backtest_results_fixture, 0),
+        plot_cost_sensitivity(robustness),
+        plot_robustness_heatmap(robustness, agent_type="bs_delta"),
+    ]
     assert all(isinstance(figure, go.Figure) for figure in figures)
 
 
@@ -70,43 +134,174 @@ def test_results_save_and_load(backtest_results_fixture, tmp_path):
     metrics = compare_metrics(backtest_results_fixture)
     save_results(backtest_results_fixture, metrics, str(tmp_path))
     loaded, loaded_metrics = load_results(str(tmp_path))
-    pd.testing.assert_frame_equal(backtest_results_fixture.episode_df, loaded.episode_df)
+    pd.testing.assert_frame_equal(
+        backtest_results_fixture.episode_df, loaded.episode_df
+    )
     assert loaded_metrics == metrics
 
 
-def test_evaluate_orchestrates_and_saves_outputs(monkeypatch, backtest_results_fixture, fast_eval_config, tmp_path):
+def test_evaluate_orchestrates_and_saves_outputs(
+    monkeypatch, backtest_results_fixture, fast_eval_config, tmp_path
+):
     import src.evaluation.evaluate as evaluation
 
     saved_figures = []
-    vec_normalize = SimpleNamespace(close=lambda: None)
-    robustness = pd.DataFrame([
-        {"kappa": kappa, "sigma": sigma, "agent_type": agent, "std_pnl": 1.0 + kappa + sigma}
-        for kappa in [0.0, 0.001] for sigma in [0.2, 0.3] for agent in ["rl_agent", "bs_delta", "zero_hedge"]
-    ])
-    config = SimpleNamespace(eval_environment=fast_eval_config, results_dir=str(tmp_path), run=SimpleNamespace(seed=0))
+    observation_space = SimpleNamespace(shape=(7,))
+    vec_normalize = SimpleNamespace(
+        close=lambda: None,
+        observation_space=observation_space,
+        obs_rms=SimpleNamespace(mean=np.zeros(7)),
+        venv=SimpleNamespace(get_attr=lambda _: ["full"]),
+    )
+    model = SimpleNamespace(observation_space=observation_space)
+    robustness = pd.DataFrame(
+        [
+            {
+                "kappa": kappa,
+                "sigma": sigma,
+                "agent_type": agent,
+                "std_pnl": 1.0 + kappa + sigma,
+            }
+            for kappa in [0.0, 0.001]
+            for sigma in [0.2, 0.3]
+            for agent in ["rl_agent", "bs_delta", "zero_hedge"]
+        ]
+    )
+    config = SimpleNamespace(
+        eval_environment=fast_eval_config,
+        results_dir=str(tmp_path),
+        run=SimpleNamespace(seed=0),
+    )
+    evaluation_results = BacktestResults(
+        episode_df=pd.concat(
+            [
+                backtest_results_fixture.episode_df,
+                backtest_results_fixture.episode_df.query(
+                    "agent_type == 'bs_delta'"
+                ).assign(agent_type="rl_agent"),
+            ],
+            ignore_index=True,
+        ),
+        step_df=pd.concat(
+            [
+                backtest_results_fixture.step_df,
+                backtest_results_fixture.step_df.query(
+                    "agent_type == 'bs_delta'"
+                ).assign(agent_type="rl_agent"),
+            ],
+            ignore_index=True,
+        ),
+    )
     monkeypatch.setattr(evaluation, "load_config", lambda _: config)
-    monkeypatch.setattr(evaluation.SAC, "load", lambda _: SimpleNamespace())
-    monkeypatch.setattr(evaluation, "load_env_for_inference", lambda *args, **kwargs: vec_normalize)
-    monkeypatch.setattr(evaluation, "run_backtest", lambda *args, **kwargs: backtest_results_fixture)
-    monkeypatch.setattr(evaluation, "run_robustness_sweep", lambda *args, **kwargs: robustness)
-    monkeypatch.setattr(evaluation, "save_figure", lambda fig, directory, name: saved_figures.append(name))
+    monkeypatch.setattr(evaluation.SAC, "load", lambda _: model)
+    monkeypatch.setattr(
+        evaluation, "load_env_for_inference", lambda *args, **kwargs: vec_normalize
+    )
+    monkeypatch.setattr(
+        evaluation, "run_backtest", lambda *args, **kwargs: evaluation_results
+    )
+    monkeypatch.setattr(
+        evaluation, "run_robustness_sweep", lambda *args, **kwargs: robustness
+    )
+    monkeypatch.setattr(
+        evaluation,
+        "save_figure",
+        lambda fig, directory, name: saved_figures.append(name),
+    )
 
-    evaluation.evaluate("model.zip", "vecnorm.pkl", output_dir=str(tmp_path), n_episodes=2, run_robustness=True)
+    evaluation.evaluate(
+        "model.zip",
+        "vecnorm.pkl",
+        output_dir=str(tmp_path),
+        n_episodes=2,
+        run_robustness=True,
+    )
 
     assert (tmp_path / "episode_data.csv").exists()
     assert (tmp_path / "metrics.json").exists()
+    saved_metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
+    assert "confidence_intervals" in saved_metrics
+    assert "rl_agent" in saved_metrics and "improvement" in saved_metrics
     assert (tmp_path / "robustness.csv").exists()
-    assert {"pnl_distribution", "cost_sensitivity", "robustness_heatmap_rl_agent"} <= set(saved_figures)
+    assert {
+        "pnl_distribution",
+        "cost_sensitivity",
+        "robustness_heatmap_rl_agent",
+    } <= set(saved_figures)
 
 
 def test_evaluate_cli_parses_arguments(monkeypatch):
     import src.evaluation.evaluate as evaluation
 
     received = {}
-    monkeypatch.setattr(evaluation, "evaluate", lambda *args: received.setdefault("args", args))
-    monkeypatch.setattr("sys.argv", ["evaluate.py", "--checkpoint", "model.zip", "--vecnorm", "stats.pkl", "--n-episodes", "3", "--skip-robustness"])
+    monkeypatch.setattr(
+        evaluation, "evaluate", lambda **kwargs: received.setdefault("kwargs", kwargs)
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "evaluate.py",
+            "--checkpoint",
+            "model.zip",
+            "--vecnorm",
+            "stats.pkl",
+            "--n-episodes",
+            "3",
+            "--skip-robustness",
+            "--seed-offset",
+            "10",
+            "--robustness-episodes",
+            "7",
+            "--kappa-grid",
+            "0.0",
+            "0.1",
+            "--sigma-grid",
+            "0.2",
+            "0.3",
+            "--n-boot",
+            "200",
+            "--market-model",
+            "heston",
+            "--market-model-kwargs",
+            '{"kappa": 1.5}',
+        ],
+    )
     evaluation.main()
-    assert received["args"] == ("model.zip", "stats.pkl", "configs/training.yaml", 3, None, False)
+    assert received["kwargs"]["checkpoint_path"] == "model.zip"
+    assert received["kwargs"]["vecnorm_path"] == "stats.pkl"
+    assert received["kwargs"]["config_path"] == "configs/training.yaml"
+    assert received["kwargs"]["n_episodes"] == 3
+    assert received["kwargs"]["run_robustness"] is False
+    assert received["kwargs"]["legacy"] is False
+    assert received["kwargs"]["seed_offset"] == 10
+    assert received["kwargs"]["robustness_episodes"] == 7
+    assert received["kwargs"]["kappa_grid"] == [0.0, 0.1]
+    assert received["kwargs"]["sigma_grid"] == [0.2, 0.3]
+    assert received["kwargs"]["n_boot"] == 200
+    assert received["kwargs"]["market_model"] == "heston"
+    assert received["kwargs"]["market_model_kwargs"] == {"kappa": 1.5}
+
+
+def test_seed_offset_is_shared_by_batched_and_legacy(fast_eval_config):
+    policies = [BSDeltaPolicy(), ZeroHedgePolicy()]
+    legacy = run_backtest(
+        policies,
+        fast_eval_config,
+        n_episodes=3,
+        show_progress=False,
+        legacy=True,
+        seed_offset=10,
+    )
+    batched = run_backtest(
+        policies,
+        fast_eval_config,
+        n_episodes=3,
+        show_progress=False,
+        legacy=False,
+        seed_offset=10,
+    )
+    assert set(legacy.episode_df["seed"]) == {10, 11, 12}
+    pd.testing.assert_frame_equal(legacy.episode_df, batched.episode_df)
 
 
 def test_save_load_round_trip_preserves_dtypes(backtest_results_fixture, tmp_path):
@@ -146,8 +341,6 @@ def test_print_metrics_summary_outputs_to_stdout(backtest_results_fixture, capsy
 
 def test_save_figure_graceful_kaleido_failure(tmp_path, monkeypatch):
     """save_figure logs a warning and does not raise if PNG export fails."""
-    import pandas as pd
-
     from src.evaluation.backtest import BacktestResults
     from src.evaluation.plots import plot_pnl_distribution, save_figure
 
@@ -174,3 +367,148 @@ def test_save_figure_graceful_kaleido_failure(tmp_path, monkeypatch):
 
     save_figure(fig, str(tmp_path), "test_fig")
     assert (tmp_path / "test_fig.html").exists()
+
+
+def test_batched_matches_legacy_exact_for_baselines(fast_eval_config):
+    """New batched and legacy implementations produce identical DataFrames on baselines."""
+    policies = [BSDeltaPolicy(), ZeroHedgePolicy()]
+    legacy_res = run_backtest(
+        policies, fast_eval_config, n_episodes=10, show_progress=False, legacy=True
+    )
+    batched_res = run_backtest(
+        policies,
+        fast_eval_config,
+        n_episodes=10,
+        show_progress=False,
+        legacy=False,
+        batch_size=4,
+    )
+    pd.testing.assert_frame_equal(legacy_res.episode_df, batched_res.episode_df)
+    pd.testing.assert_frame_equal(legacy_res.step_df, batched_res.step_df)
+
+
+@pytest.mark.parametrize("observation_mode", ["full", "no_greeks", "price_only"])
+@pytest.mark.parametrize("legacy", [False, True])
+def test_baselines_run_in_every_observation_mode(
+    fast_eval_config, observation_mode, legacy
+):
+    """Baseline policies use reset info, not a mode-specific observation index."""
+    config = replace(fast_eval_config, observation_mode=observation_mode)
+    results = run_backtest(
+        [BSDeltaPolicy(), ZeroHedgePolicy()],
+        config,
+        n_episodes=10,
+        show_progress=False,
+        legacy=legacy,
+    )
+
+    assert len(results.episode_df) == 20
+    assert results.episode_df["terminal_pnl"].notna().all()
+
+
+@pytest.mark.parametrize("observation_mode", ["full", "no_greeks", "price_only"])
+@pytest.mark.parametrize("legacy", [False, True])
+def test_baseline_pnl_is_identical_across_observation_modes(
+    fast_eval_config, observation_mode, legacy
+):
+    """Observation feature selection must not change baseline accounting."""
+    full = run_backtest(
+        [BSDeltaPolicy(), ZeroHedgePolicy()],
+        replace(fast_eval_config, observation_mode="full"),
+        n_episodes=10,
+        show_progress=False,
+        legacy=legacy,
+    )
+    mode = run_backtest(
+        [BSDeltaPolicy(), ZeroHedgePolicy()],
+        replace(fast_eval_config, observation_mode=observation_mode),
+        n_episodes=10,
+        show_progress=False,
+        legacy=legacy,
+    )
+    np.testing.assert_array_equal(
+        full.episode_df["terminal_pnl"].to_numpy(),
+        mode.episode_df["terminal_pnl"].to_numpy(),
+    )
+
+
+def test_initial_info_does_not_index_reduced_observation(fast_eval_config):
+    """Regression: the old ``obs[6]`` fallback raised IndexError for 3-D obs."""
+    from src.envs.hedging_env import HedgingEnv
+    from src.evaluation.backtest import _initial_info
+
+    env = HedgingEnv(
+        **replace(fast_eval_config, observation_mode="price_only").as_dict()
+    )
+    obs, reset_info = env.reset(seed=0)
+    assert obs.shape == (3,)
+    assert _initial_info(reset_info) == reset_info
+    assert reset_info["bs_delta"] == env._bs_deltas[0]
+
+
+def test_batched_matches_legacy_for_rl_agent_checkpoint(fast_eval_config):
+    """Verify batched matches legacy on actual trained SAC checkpoint."""
+    ckpt_path = Path("checkpoints/sac_hedging_20260721_002714/best_model.zip")
+    vecnorm_path = Path("checkpoints/sac_hedging_20260721_002714/best_vecnorm.pkl")
+    if not (ckpt_path.exists() and vecnorm_path.exists()):
+        pytest.skip("Real SAC checkpoint not found")
+
+    from stable_baselines3 import SAC
+
+    from src.evaluation.backtest import RLAgentPolicy
+    from src.training.env_factory import load_env_for_inference
+
+    model = SAC.load(str(ckpt_path))
+    vn = load_env_for_inference(fast_eval_config, str(vecnorm_path), seed=42)
+    try:
+        policy = RLAgentPolicy(model, vn, deterministic=True)
+        legacy_res = run_backtest(
+            [policy], fast_eval_config, n_episodes=10, show_progress=False, legacy=True
+        )
+        batched_res = run_backtest(
+            [policy],
+            fast_eval_config,
+            n_episodes=10,
+            show_progress=False,
+            legacy=False,
+            batch_size=4,
+        )
+
+        # Prices must match exactly
+        np.testing.assert_allclose(
+            legacy_res.step_df["price"].to_numpy(),
+            batched_res.step_df["price"].to_numpy(),
+            atol=1e-7,
+        )
+        # Hedge ratios and PnLs match within documented float32 tolerance (1e-5)
+        np.testing.assert_allclose(
+            legacy_res.step_df["hedge_ratio"].to_numpy(),
+            batched_res.step_df["hedge_ratio"].to_numpy(),
+            atol=1e-5,
+        )
+        np.testing.assert_allclose(
+            legacy_res.step_df["step_pnl"].to_numpy(),
+            batched_res.step_df["step_pnl"].to_numpy(),
+            atol=1e-5,
+        )
+        np.testing.assert_allclose(
+            legacy_res.episode_df["terminal_pnl"].to_numpy(),
+            batched_res.episode_df["terminal_pnl"].to_numpy(),
+            atol=1e-5,
+        )
+        np.testing.assert_allclose(
+            legacy_res.episode_df["total_cost"].to_numpy(),
+            batched_res.episode_df["total_cost"].to_numpy(),
+            atol=1e-5,
+        )
+    finally:
+        vn.close()
+
+
+def test_predict_batch_interface():
+    bs = BSDeltaPolicy()
+    zh = ZeroHedgePolicy()
+    obs_batch = np.zeros((3, 7), dtype=np.float32)
+    infos = [{"bs_delta": 0.25}, {"bs_delta": 0.50}, {"bs_delta": 0.75}]
+    np.testing.assert_allclose(bs.predict_batch(obs_batch, infos), [0.25, 0.50, 0.75])
+    np.testing.assert_allclose(zh.predict_batch(obs_batch, infos), [0.0, 0.0, 0.0])

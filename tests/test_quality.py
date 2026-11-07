@@ -8,8 +8,6 @@ import os
 import subprocess
 import sys
 
-import pytest
-
 
 def test_ruff_no_violations():
     """ruff check src/ must return zero violations."""
@@ -59,8 +57,8 @@ def test_no_print_statements_in_library_code():
                 ):
                     violations.append(f"{fpath}:{node.lineno}")
 
-    assert not violations, (
-        "Found bare print() calls in library code:\n" + "\n".join(violations)
+    assert not violations, "Found bare print() calls in library code:\n" + "\n".join(
+        violations
     )
 
 
@@ -80,8 +78,8 @@ def test_all_public_modules_importable():
                 except Exception as error:
                     failed.append(f"{module_name}: {error}")
 
-    assert not failed, (
-        "The following modules could not be imported:\n" + "\n".join(failed)
+    assert not failed, "The following modules could not be imported:\n" + "\n".join(
+        failed
     )
 
 

@@ -83,3 +83,35 @@ python -m src.evaluation.evaluate \
 
 Evaluation outputs are written to `results/evaluation_<timestamp>/` unless
 `--output-dir` is provided.
+
+## Experiment checkpoint (2026-11-06)
+
+This dated section is appended to preserve the generated E0, E1, and E6
+experiment artifacts. Existing RESULTS.md numbers above are unchanged. The
+paste-ready values and source paths are in
+`docs/experiments/E7_results_tables.md`; the Word-report figure/table list is
+in `docs/experiments/E7_word_figures_tables.md`.
+
+### Completed experiments
+
+- E0 checkpoint reevaluation completed with both batched and legacy
+  backtesters. Sources: `results/E0_batched_1000/` and
+  `results/E0_legacy_1000/`.
+- E1 five-seed, 300,000-step baseline completed for seeds 0--4. Source:
+  `results/experiments/baseline_multiseed_e1/`.
+- E6 Heston/Merton evaluation completed for the five E1 checkpoints. No
+  retraining was performed. Source:
+  `results/experiments/e6_market_robustness/`.
+
+### NOT RUN experiments
+
+- E2: five-seed 2,000,000-step training — NOT RUN. No long-budget result or
+  plateau conclusion is supported.
+- E3: multi-seed risk-aversion sweep — NOT RUN. No risk-aversion effect is
+  supported.
+- E4: fixed HPO and best-configuration retraining — NOT RUN. No HPO selection-
+  bias estimate is supported.
+- E5: observation-mode ablation — NOT RUN. No conclusion about BS-delta or
+  sigma leakage is supported.
+
+These NOT RUN statuses remain limitations for the report.

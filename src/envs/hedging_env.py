@@ -32,6 +32,31 @@ from src.envs.reward import compute_step_reward
 from src.finance.black_scholes import call_delta, call_price
 from src.finance.transaction_costs import proportional_cost
 from src.simulation.gbm import GBMSimulator
+from src.simulation.heston import HestonSimulator
+from src.simulation.merton import MertonJumpDiffusionSimulator
+
+_MARKET_MODELS = {"gbm", "heston", "merton"}
+
+_OBS_KEYS = [
+    "price_ratio",
+    "time_remaining",
+    "sigma",
+    "r",
+    "strike_ratio",
+    "hedge_pos",
+    "bs_delta",
+]
+_OBS_MODE_INDICES = {
+    "full": [0, 1, 2, 3, 4, 5, 6],
+    "no_greeks": [0, 1, 3, 4, 5],
+    "price_only": [0, 1, 5],
+    "no_bs_delta": [0, 1, 2, 3, 4, 5],
+    "no_bs_delta_no_sigma": [0, 1, 3, 4, 5],
+}
+_OBS_KEYS_BY_MODE = {
+    mode: [_OBS_KEYS[index] for index in indices]
+    for mode, indices in _OBS_MODE_INDICES.items()
+}
 
 _MAX_SEED = np.iinfo(np.int32).max
 _MIN_TIME_FOR_DELTA = 1e-8  # avoids 0/0 in d1 at expiry; delta is a step there
@@ -55,6 +80,13 @@ class HedgingEnv(gym.Env):
     Action: Box(1,) in [0, 1]; non-finite actions raise ``ValueError``.
     Episode: exactly ``T`` steps, then ``terminated=True``.
 
+    Pricing/information convention: option values and ``bs_delta`` are always
+    Black-Scholes marks using the environment's configured (or randomised)
+    ``sigma``. Heston variance and Merton jumps are not inserted into those
+    marks. The top-level ``kappa`` remains the transaction-cost coefficient;
+    Heston's variance mean-reversion speed uses the backward-compatible
+    ``market_model_kwargs["kappa"]`` key.
+
     Parameters
     ----------
     risk_aversion:
@@ -71,15 +103,10 @@ class HedgingEnv(gym.Env):
         ``info["financing_cost"]``, *not* in transaction cost).
     """
 
-    OBS_KEYS: ClassVar[list[str]] = [
-        "price_ratio",
-        "time_remaining",
-        "sigma",
-        "r",
-        "strike_ratio",
-        "hedge_pos",
-        "bs_delta",
-    ]
+    OBS_KEYS: ClassVar[list[str]] = _OBS_KEYS
+    OBS_MODE_INDICES: ClassVar[dict[str, list[int]]] = _OBS_MODE_INDICES
+    OBS_KEYS_BY_MODE: ClassVar[dict[str, list[str]]] = _OBS_KEYS_BY_MODE
+    _OBS_MODES = OBS_MODE_INDICES
     _OBS_LOW: ClassVar[np.ndarray] = np.array(
         [0.0, 0.0, 0.01, 0.00, 0.5, 0.0, 0.0], dtype=np.float32
     )
@@ -104,9 +131,16 @@ class HedgingEnv(gym.Env):
         risk_aversion: float = 0.0,
         liquidate_at_expiry: bool = False,
         include_financing: bool = False,
+        market_model: str = "gbm",
+        market_model_kwargs: dict[str, Any] | None = None,
+        observation_mode: str = "full",
     ) -> None:
         super().__init__()
         self._validate_config(S0, K, T, r, sigma, dt, kappa, sigma_range, risk_aversion)
+        if market_model not in _MARKET_MODELS:
+            raise ConfigurationError(
+                f"market_model must be one of {sorted(_MARKET_MODELS)}, got {market_model!r}."
+            )
 
         self.S0 = float(S0)
         self.K = float(K)
@@ -121,6 +155,18 @@ class HedgingEnv(gym.Env):
         self.risk_aversion = float(risk_aversion)
         self.liquidate_at_expiry = liquidate_at_expiry
         self.include_financing = include_financing
+        self.market_model = market_model
+        self.market_model_kwargs = self._validate_market_model_kwargs(
+            market_model, market_model_kwargs
+        )
+
+        if observation_mode not in self._OBS_MODES:
+            raise ConfigurationError(
+                f"observation_mode must be one of {sorted(self._OBS_MODES)}, "
+                f"got {observation_mode!r}."
+            )
+        self.observation_mode = observation_mode
+        self._obs_indices = self._OBS_MODES[observation_mode]
 
         self._seed = seed
         self._first_reset = True
@@ -129,8 +175,11 @@ class HedgingEnv(gym.Env):
         self._option_values: np.ndarray = np.empty(0)
         self._bs_deltas: np.ndarray = np.empty(0)
 
+        obs_idx = self._OBS_MODES[observation_mode]
         self.observation_space = spaces.Box(
-            low=self._OBS_LOW.copy(), high=self._OBS_HIGH.copy(), dtype=np.float32
+            low=self._OBS_LOW[obs_idx].copy(),
+            high=self._OBS_HIGH[obs_idx].copy(),
+            dtype=np.float32,
         )
         self.action_space = spaces.Box(
             low=np.array([0.0], dtype=np.float32),
@@ -141,6 +190,62 @@ class HedgingEnv(gym.Env):
     # ------------------------------------------------------------------ #
     # Validation
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _validate_market_model_kwargs(
+        market_model: str, market_model_kwargs: dict[str, Any] | None
+    ) -> dict[str, float]:
+        """Validate model-specific kwargs before any episode reset."""
+        if market_model_kwargs is None:
+            return {}
+        if not isinstance(market_model_kwargs, dict):
+            raise ConfigurationError("market_model_kwargs must be a dictionary.")
+
+        allowed = {
+            "gbm": set(),
+            "heston": {"v0", "kappa", "theta", "xi", "rho"},
+            "merton": {"lam", "mu_J", "sigma_J"},
+        }[market_model]
+        unknown = set(market_model_kwargs) - allowed
+        if unknown:
+            raise ConfigurationError(
+                f"Unknown market_model_kwargs for {market_model!r}: "
+                f"{sorted(unknown, key=str)}; allowed keys are {sorted(allowed)}."
+            )
+
+        values: dict[str, float] = {}
+        for key, value in market_model_kwargs.items():
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ConfigurationError(
+                    f"market_model_kwargs[{key!r}] must be numeric, got {value!r}."
+                ) from exc
+            if not math.isfinite(numeric_value):
+                raise ConfigurationError(
+                    f"market_model_kwargs[{key!r}] must be finite, got {value!r}."
+                )
+            values[key] = numeric_value
+
+        if market_model == "heston":
+            if "v0" in values and values["v0"] <= 0:
+                raise ConfigurationError("Heston v0 must be > 0.")
+            if "kappa" in values and values["kappa"] <= 0:
+                raise ConfigurationError(
+                    "Heston market_model_kwargs['kappa'] must be > 0."
+                )
+            if "theta" in values and values["theta"] <= 0:
+                raise ConfigurationError("Heston theta must be > 0.")
+            if "xi" in values and values["xi"] <= 0:
+                raise ConfigurationError("Heston xi must be > 0.")
+            if "rho" in values and not -1.0 <= values["rho"] <= 1.0:
+                raise ConfigurationError("Heston rho must be in [-1, 1].")
+        elif market_model == "merton":
+            if "lam" in values and values["lam"] < 0:
+                raise ConfigurationError("Merton lam must be >= 0.")
+            if "sigma_J" in values and values["sigma_J"] < 0:
+                raise ConfigurationError("Merton sigma_J must be >= 0.")
+        return values
+
     @classmethod
     def _validate_config(
         cls,
@@ -225,10 +330,7 @@ class HedgingEnv(gym.Env):
             if seed is not None
             else int(self.np_random.integers(0, _MAX_SEED))
         )
-        sim = GBMSimulator(
-            S0=self.S0, mu=self.r, sigma=self.sigma, dt=self.dt, seed=path_seed
-        )
-        price_path = sim.generate_path(self.T)
+        price_path = self._generate_price_path(path_seed)
 
         # One vectorised pass over all T+1 dates (replaces 2 scalar calls/step).
         t_rem = (self.T - np.arange(self.T + 1)) * self.dt
@@ -260,7 +362,13 @@ class HedgingEnv(gym.Env):
             cumulative_pnl=0.0,
             cumulative_cost=0.0,
         )
-        return self._build_obs(), {}
+        reset_info = {
+            "S": float(self.state.S),
+            "bs_delta": float(self._bs_deltas[0]),
+            "hedge_pos": float(self.state.hedge_pos),
+            "option_value": float(self.state.option_value),
+        }
+        return self._build_obs(), reset_info
 
     def step(
         self, action: np.ndarray
@@ -322,10 +430,63 @@ class HedgingEnv(gym.Env):
     # ------------------------------------------------------------------ #
     # Helpers
     # ------------------------------------------------------------------ #
+
+    def _generate_price_path(self, seed: int) -> np.ndarray:
+        """Generate a price path using the configured market model."""
+        if self.market_model == "gbm":
+            sim = GBMSimulator(
+                S0=self.S0, mu=self.r, sigma=self.sigma, dt=self.dt, seed=seed
+            )
+        elif self.market_model == "heston":
+            # Defaults: v0=sigma^2, Heston kappa=2, theta=sigma^2,
+            # rho=-0.7. Derive xi when omitted to satisfy Feller while
+            # retaining xi=0.3 at the legacy sigma=0.20 default.
+            kwargs = {
+                "v0": self.sigma**2,
+                "kappa": 2.0,
+                "theta": self.sigma**2,
+                "rho": -0.7,
+            }
+            kwargs.update(self.market_model_kwargs)
+            if "xi" not in self.market_model_kwargs:
+                kwargs["xi"] = min(
+                    0.3, np.sqrt(2.0 * kwargs["kappa"] * kwargs["theta"])
+                )
+            sim = HestonSimulator(  # type: ignore[assignment]
+                S0=self.S0,
+                mu=self.r,
+                dt=self.dt,
+                seed=seed,
+                **kwargs,
+            )
+        elif self.market_model == "merton":
+            # Defaults: lam=1 jump/yr, mu_J=-0.05, sigma_J=0.1
+            kwargs = {
+                "lam": 1.0,
+                "mu_J": -0.05,
+                "sigma_J": 0.10,
+            }
+            kwargs.update(self.market_model_kwargs)
+            sim = MertonJumpDiffusionSimulator(  # type: ignore[assignment]
+                S0=self.S0,
+                mu=self.r,
+                sigma=self.sigma,
+                dt=self.dt,
+                seed=seed,
+                **kwargs,
+            )
+        else:
+            raise ConfigurationError(f"Unknown market_model: {self.market_model!r}")
+        return sim.generate_path(self.T)
+
     def _build_obs(self) -> np.ndarray:
-        """Build the 7-d observation from the current episode state."""
+        """Build the observation vector from the current episode state.
+
+        The full 7-d feature vector is constructed first, then sliced
+        according to ``self.observation_mode``.
+        """
         assert self.state is not None  # internal invariant, not user input
-        obs = np.array(
+        full_obs = np.array(
             [
                 self.state.S / self.S0,
                 self.state.time_remaining,
@@ -337,7 +498,8 @@ class HedgingEnv(gym.Env):
             ],
             dtype=np.float32,
         )
-        return np.clip(obs, self._OBS_LOW, self._OBS_HIGH)
+        obs = np.clip(full_obs, self._OBS_LOW, self._OBS_HIGH)[self._obs_indices]
+        return obs
 
     def _build_info(self, cost: float, step_pnl: float) -> dict[str, Any]:
         """Per-step diagnostics (raw, un-shaped P&L)."""

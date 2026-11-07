@@ -194,6 +194,27 @@ def _paired_arrays(
     return merged["terminal_pnl_a"].to_numpy(), merged["terminal_pnl_b"].to_numpy()
 
 
+def _validate_seed_alignment(episode_df: pd.DataFrame) -> None:
+    """Require every policy in a backtest to use the same seed set."""
+    required = {"agent_type", "seed"}
+    missing = required - set(episode_df.columns)
+    if missing:
+        return
+    seed_sets = {
+        agent: set(group["seed"].tolist())
+        for agent, group in episode_df.groupby("agent_type")
+    }
+    if len(seed_sets) < 2:
+        return
+    first_agent, first_seeds = next(iter(seed_sets.items()))
+    mismatched = [agent for agent, seeds in seed_sets.items() if seeds != first_seeds]
+    if mismatched:
+        raise ValueError(
+            "Policies were not evaluated on identical seed sets: "
+            f"{first_agent} differs from {mismatched}."
+        )
+
+
 def compare_with_ci(
     episode_df: pd.DataFrame,
     primary: str = "rl_agent",
@@ -209,6 +230,7 @@ def compare_with_ci(
     says nothing about variability across training runs (see
     ``aggregate_run_metrics``).
     """
+    _validate_seed_alignment(episode_df)
     a, b = _paired_arrays(episode_df, primary, baseline)
     report: dict[str, dict[str, dict[str, float]]] = {}
     for name, fn in STAT_LIBRARY.items():
