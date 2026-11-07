@@ -58,24 +58,24 @@ jobs:
           from src.envs.hedging_env import HedgingEnv, ConfigurationError
           import numpy as np
 
-            env = HedgingEnv()
+          env = HedgingEnv()
 
-            try:
-                HedgingEnv(S0=-1)
-            except ConfigurationError:
-                pass
-            else:
-                raise SystemExit("validation vanished under -O")
+          try:
+              HedgingEnv(S0=-1)
+          except ConfigurationError:
+              pass
+          else:
+              raise SystemExit("validation vanished under -O")
 
-            env.reset(seed=0)
+          env.reset(seed=0)
 
-            try:
-                env.step(np.array([np.nan]))
-            except ValueError:
-                pass
-            else:
-                raise SystemExit("NaN guard vanished under -O")
-            PY
+          try:
+              env.step(np.array([np.nan]))
+          except ValueError:
+              pass
+          else:
+              raise SystemExit("NaN guard vanished under -O")
+          PY
       - uses: codecov/codecov-action@v4
         if: matrix.python-version == '3.12'
         with:
